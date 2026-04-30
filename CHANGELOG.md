@@ -8,6 +8,14 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/), e o
 
 ## [Unreleased]
 
+### Alterado (UX)
+
+- Menu lateral agrupado por **etapas do trabalho** (Visão geral, Planejamento, Campo e fiscalização, Cidadão e demandas, Indicadores, Auditoria).
+- Cabeçalho com **contexto**: nome do grupo, título da página e **texto de ajuda** por tela.
+- **Painel**: cartão **Fluxo de trabalho** com atalhos numerados (ordem sugerida), adaptada ao perfil (admin, gestor, executor, consulta).
+- **Mobile**: barra inferior com **atalhos por perfil** + botão **Mais** para abrir o menu completo (evita ficar preso às quatro primeiras páginas).
+- **Login**: resumo do **fluxo típico do fiscal** para orientar antes de entrar.
+
 ### Como documentar a próxima entrega
 
 1. Mova itens de **Unreleased** para uma nova seção com número de versão e data.

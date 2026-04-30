@@ -12,7 +12,7 @@ Este documento descreve as **funcionalidades já implementadas** no MVP, do pont
 2. [Perfis, permissões e acesso](#2-perfis-permissões-e-acesso)
 3. [URLs e atalhos](#3-urls-e-atalhos)
 4. [Persistência, dados de demonstração e reset](#4-persistência-dados-de-demonstração-e-reset)
-5. [Dashboard](#5-dashboard)
+5. [Dashboard (Painel)](#5-dashboard-painel)
 6. [Cadastros](#6-cadastros)
 7. [Roteiros de vistoria](#7-roteiros-de-vistoria)
 8. [Vistorias](#8-vistorias)
@@ -59,7 +59,12 @@ O login atual é **demonstrativo**: escolha um usuário na lista e use a senha i
 
 *A matriz exata está no código (`pageConfig`); se novas páginas forem criadas, atualize esta tabela no manual.*
 
----
+### Navegação e fluxo
+
+- O **menu lateral** (e o menu “**Mais**” no celular) agrupa as páginas por **etapa do trabalho**: Visão geral, Planejamento, Campo e fiscalização, Cidadão e demandas, Indicadores e Auditoria — para não parecer uma lista aleatória de funções.
+- No **Painel**, o cartão **Fluxo de trabalho** mostra **atalhos numerados** na ordem sugerida; a lista muda conforme o **perfil** (admin vê também Roteiros, Cadastros e Auditoria).
+- O **cabeçalho** de cada tela repete o **grupo**, o **nome curto** da página (ex.: Painel, Vistorias) e uma **frase de ajuda** sobre o que fazer naquela área.
+- Na **barra inferior** (smartphone), quatro atalhos refletem o uso mais comum do perfil; o quinto botão (**Mais**) abre o menu completo.
 
 ## 3. URLs e atalhos
 
@@ -85,17 +90,18 @@ IDs úteis de atalho: `dashboard`, `cadastros`, `roteiros`, `denuncias`, `vistor
 
 ---
 
-## 5. Dashboard
+## 5. Dashboard (Painel)
 
-**Objetivo:** visão gerencial rápida.
+**Objetivo:** visão gerencial rápida e **entrada no fluxo** do dia.
 
 **Conteúdo principal:**
 
+- **Fluxo de trabalho:** atalhos numerados (Denúncias → Vistorias → Planos → Documentos → Chamados, etc., conforme perfil) para reduzir cliques e orientar quem está começando.
 - Contadores: vistorias finalizadas, chamados, vencidos, percentual concluído/validado.
 - Segunda fileira: não conformidades ativas, denúncias em andamento, documentos emitidos, grupos de denúncias.
 - Gráficos: chamados por status, por prioridade, por setor; lista resumida de chamados vencidos; tempo médio de conclusão (quando houver dados).
 
-**Quem acessa:** todos os perfis com permissão de Dashboard.
+**Quem acessa:** todos os perfis com permissão de Painel (`dashboard`).
 
 ---
 

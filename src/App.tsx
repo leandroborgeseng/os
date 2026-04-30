@@ -13,6 +13,8 @@ import {
   LogOut,
   Menu,
   MapPin,
+  MoreHorizontal,
+  Sparkles,
   Paperclip,
   Printer,
   Search,
@@ -78,6 +80,19 @@ import type {
 } from './types'
 
 type Page = 'dashboard' | 'cadastros' | 'roteiros' | 'denuncias' | 'vistorias' | 'planos' | 'documentos' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
+
+type NavGroup = 'inicio' | 'planejar' | 'campo' | 'cidadao_demandas' | 'gestao' | 'sistema'
+
+const navGroupMeta: Record<NavGroup, { label: string; description: string }> = {
+  inicio: { label: 'Visao geral', description: 'Entrada e indicadores do dia' },
+  planejar: { label: 'Planejamento', description: 'Estrutura e roteiros antes do campo' },
+  campo: { label: 'Campo e fiscalizacao', description: 'Execucao, adequacao e documentos' },
+  cidadao_demandas: { label: 'Cidadao e demandas', description: 'Denuncias e chamados operacionais' },
+  gestao: { label: 'Indicadores', description: 'Relatorios e exportacao' },
+  sistema: { label: 'Auditoria', description: 'Rastreabilidade administrativa' },
+}
+
+const navGroupOrder: NavGroup[] = ['inicio', 'planejar', 'campo', 'cidadao_demandas', 'gestao', 'sistema']
 
 type AppMaps = {
   users: Record<string, AppData['users'][number]>
@@ -150,18 +165,95 @@ const officialDocumentStatusColors: Record<OfficialDocumentStatus, string> = {
   Cancelado: 'bg-slate-200 text-slate-700',
 }
 
-const pageConfig: Array<{ id: Page; label: string; icon: ReactNode; roles: UserRole[] }> = [
-  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
-  { id: 'cadastros', label: 'Cadastros', icon: <Building2 size={18} />, roles: ['admin'] },
-  { id: 'roteiros', label: 'Roteiros', icon: <FileText size={18} />, roles: ['admin', 'gestor'] },
-  { id: 'denuncias', label: 'Denuncias', icon: <AlertTriangle size={18} />, roles: ['admin', 'gestor', 'consulta'] },
-  { id: 'vistorias', label: 'Vistorias', icon: <ClipboardCheck size={18} />, roles: ['admin', 'gestor'] },
-  { id: 'planos', label: 'Planos de acao', icon: <AlertTriangle size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
-  { id: 'documentos', label: 'Documentos', icon: <FileText size={18} />, roles: ['admin', 'gestor', 'consulta'] },
-  { id: 'chamados', label: 'Chamados', icon: <TicketCheck size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
-  { id: 'relatorios', label: 'Relatorios', icon: <FileText size={18} />, roles: ['admin', 'gestor', 'consulta'] },
-  { id: 'impressao', label: 'Impressao', icon: <Printer size={18} />, roles: ['admin', 'gestor', 'executor'] },
-  { id: 'auditoria', label: 'Auditoria', icon: <ShieldCheck size={18} />, roles: ['admin'] },
+const pageConfig: Array<{ id: Page; label: string; icon: ReactNode; roles: UserRole[]; group: NavGroup; hint: string }> = [
+  {
+    id: 'dashboard',
+    label: 'Painel',
+    icon: <LayoutDashboard size={18} />,
+    roles: ['admin', 'gestor', 'executor', 'consulta'],
+    group: 'inicio',
+    hint: 'Mapa do sistema, indicadores e atalhos do fluxo',
+  },
+  {
+    id: 'cadastros',
+    label: 'Cadastros',
+    icon: <Building2 size={18} />,
+    roles: ['admin'],
+    group: 'planejar',
+    hint: 'Locais, categorias e checklist legado',
+  },
+  {
+    id: 'roteiros',
+    label: 'Roteiros',
+    icon: <FileText size={18} />,
+    roles: ['admin', 'gestor'],
+    group: 'planejar',
+    hint: 'Areas, tipos de vistoria e perguntas do roteiro',
+  },
+  {
+    id: 'vistorias',
+    label: 'Vistorias',
+    icon: <ClipboardCheck size={18} />,
+    roles: ['admin', 'gestor'],
+    group: 'campo',
+    hint: 'Registrar inspecao em campo com mapa e evidencias',
+  },
+  {
+    id: 'planos',
+    label: 'Planos de acao',
+    icon: <AlertTriangle size={18} />,
+    roles: ['admin', 'gestor', 'executor', 'consulta'],
+    group: 'campo',
+    hint: 'Tratar nao conformidades e prazos de adequacao',
+  },
+  {
+    id: 'documentos',
+    label: 'Documentos',
+    icon: <FileText size={18} />,
+    roles: ['admin', 'gestor', 'consulta'],
+    group: 'campo',
+    hint: 'Autos e notificacoes com QR e impressao',
+  },
+  {
+    id: 'impressao',
+    label: 'Impressao',
+    icon: <Printer size={18} />,
+    roles: ['admin', 'gestor', 'executor'],
+    group: 'campo',
+    hint: 'Bluetooth e teste de impressora termica',
+  },
+  {
+    id: 'denuncias',
+    label: 'Denuncias',
+    icon: <MapPin size={18} />,
+    roles: ['admin', 'gestor', 'consulta'],
+    group: 'cidadao_demandas',
+    hint: 'Triagem de protocolos do portal do cidadao',
+  },
+  {
+    id: 'chamados',
+    label: 'Chamados',
+    icon: <TicketCheck size={18} />,
+    roles: ['admin', 'gestor', 'executor', 'consulta'],
+    group: 'cidadao_demandas',
+    hint: 'Demandas operacionais, SLA e historico',
+  },
+  {
+    id: 'relatorios',
+    label: 'Relatorios',
+    icon: <Eye size={18} />,
+    roles: ['admin', 'gestor', 'consulta'],
+    group: 'gestao',
+    hint: 'Exportacao e visao analitica',
+  },
+  {
+    id: 'auditoria',
+    label: 'Auditoria',
+    icon: <ShieldCheck size={18} />,
+    roles: ['admin'],
+    group: 'sistema',
+    hint: 'Log de acoes e fila de sincronizacao',
+  },
 ]
 
 const chartColors = ['#2563eb', '#0f766e', '#f59e0b', '#dc2626', '#7c3aed', '#475569', '#ea580c', '#16a34a']
@@ -649,7 +741,22 @@ function App() {
     [data],
   )
 
-  const permittedPages = currentUser ? pageConfig.filter((page) => page.roles.includes(currentUser.role)) : []
+  const permittedPages = useMemo(
+    () => (currentUser ? pageConfig.filter((page) => page.roles.includes(currentUser.role)) : []),
+    [currentUser],
+  )
+  const permittedPageIds = useMemo(() => new Set(permittedPages.map((p) => p.id)), [permittedPages])
+
+  const mobileQuickNav = useMemo((): Page[] => {
+    if (!currentUser) return []
+    if (currentUser.role === 'executor') {
+      return ['dashboard', 'planos', 'chamados', 'impressao']
+    }
+    if (currentUser.role === 'consulta') {
+      return ['dashboard', 'denuncias', 'chamados', 'relatorios']
+    }
+    return ['dashboard', 'vistorias', 'denuncias', 'chamados']
+  }, [currentUser])
 
   const commitPublic = (producer: (draft: AppData) => AppData) => {
     setData(producer)
@@ -719,7 +826,7 @@ function App() {
 
   const renderPage = () => {
     if (activePage === 'dashboard') {
-      return <Dashboard data={data} maps={maps} />
+      return <Dashboard data={data} maps={maps} currentUser={currentUser} onNavigate={setActivePage} permittedPageIds={permittedPageIds} />
     }
     if (activePage === 'cadastros') {
       return <Registrations data={data} maps={maps} currentUser={currentUser} commit={commit} />
@@ -751,6 +858,8 @@ function App() {
     return <Audit data={data} maps={maps} />
   }
 
+  const activePageMeta = pageConfig.find((p) => p.id === activePage)
+
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       {sidebarOpen && <button type="button" aria-label="Fechar menu" className="fixed inset-0 z-30 bg-slate-950/50 lg:hidden" onClick={() => setSidebarOpen(false)} />}
@@ -776,24 +885,38 @@ function App() {
           </button>
         </div>
 
-        <nav className="mt-8 space-y-2">
-          {permittedPages.map((page) => (
-            <button
-              key={page.id}
-              type="button"
-              onClick={() => {
-                setActivePage(page.id)
-                setSidebarOpen(false)
-              }}
-              className={clsx(
-                'flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold transition',
-                activePage === page.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-white/10 hover:text-white',
-              )}
-            >
-              {page.icon}
-              {page.label}
-            </button>
-          ))}
+        <nav className="mt-6 flex max-h-[calc(100vh-12rem)] flex-col gap-5 overflow-y-auto overscroll-contain pb-28 pr-1">
+          {navGroupOrder.map((group) => {
+            const items = permittedPages.filter((page) => page.group === group)
+            if (items.length === 0) {
+              return null
+            }
+
+            return (
+              <div key={group}>
+                <p className="mb-2 px-1 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">{navGroupMeta[group].label}</p>
+                <div className="space-y-1">
+                  {items.map((page) => (
+                    <button
+                      key={page.id}
+                      type="button"
+                      onClick={() => {
+                        setActivePage(page.id)
+                        setSidebarOpen(false)
+                      }}
+                      className={clsx(
+                        'flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-semibold transition',
+                        activePage === page.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-white/10 hover:text-white',
+                      )}
+                    >
+                      {page.icon}
+                      <span className="min-w-0 flex-1 truncate">{page.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </nav>
 
         <div className="absolute inset-x-5 bottom-5 rounded-3xl border border-white/10 bg-white/5 p-4">
@@ -816,9 +939,20 @@ function App() {
             <button className="rounded-2xl border border-slate-200 p-3 lg:hidden" type="button" onClick={() => setSidebarOpen(true)} aria-label="Abrir menu completo">
               <Menu size={20} />
             </button>
-            <div className="min-w-0">
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">Sistema administrativo</p>
-              <h2 className="truncate text-xl font-bold text-slate-950">{pageConfig.find((page) => page.id === activePage)?.label}</h2>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600">
+                {activePageMeta && <span>{navGroupMeta[activePageMeta.group].label}</span>}
+                {activePageMeta && (
+                  <>
+                    <span className="font-normal text-slate-300" aria-hidden>
+                      /
+                    </span>
+                    <span className="text-slate-400">Sistema administrativo</span>
+                  </>
+                )}
+              </div>
+              <h2 className="truncate text-xl font-bold text-slate-950">{activePageMeta?.label ?? 'Painel'}</h2>
+              <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-slate-600">{activePageMeta?.hint}</p>
             </div>
             <div className="ml-auto hidden items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 md:flex">
               <CalendarClock size={18} className="text-blue-600" />
@@ -860,21 +994,34 @@ function App() {
         <main className="px-3 py-4 pb-28 sm:px-4 lg:p-8">{renderPage()}</main>
 
         <nav className="fixed inset-x-3 bottom-3 z-30 rounded-[1.75rem] border border-slate-200 bg-white/95 p-2 shadow-2xl shadow-slate-950/15 backdrop-blur lg:hidden">
-          <div className="grid grid-cols-4 gap-1">
-            {permittedPages.slice(0, 4).map((page) => (
-              <button
-                key={page.id}
-                type="button"
-                onClick={() => setActivePage(page.id)}
-                className={clsx(
-                  'flex min-h-16 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[11px] font-bold transition',
-                  activePage === page.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100',
-                )}
-              >
-                {page.icon}
-                <span className="max-w-full truncate">{page.label}</span>
-              </button>
-            ))}
+          <div className="grid grid-cols-5 gap-1">
+            {mobileQuickNav.map((pageId) => {
+              const page = pageConfig.find((p) => p.id === pageId)
+              if (!page) return null
+              return (
+                <button
+                  key={page.id}
+                  type="button"
+                  onClick={() => setActivePage(page.id)}
+                  className={clsx(
+                    'flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 text-[10px] font-bold leading-tight transition',
+                    activePage === page.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100',
+                  )}
+                >
+                  {page.icon}
+                  <span className="max-w-full truncate">{page.label}</span>
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 text-[10px] font-bold text-slate-600 transition hover:bg-slate-100"
+              aria-label="Abrir menu completo"
+            >
+              <MoreHorizontal size={18} />
+              <span className="max-w-full truncate">Mais</span>
+            </button>
           </div>
         </nav>
       </div>
@@ -948,6 +1095,24 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
             >
               Registrar denuncia como cidadao
             </a>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+              <p className="font-bold text-slate-900">Fluxo tipico do fiscal (apos entrar)</p>
+              <ol className="mt-3 list-decimal space-y-2 pl-5 leading-relaxed text-slate-600">
+                <li>
+                  <strong>Denuncias</strong> — triar protocolos do portal
+                </li>
+                <li>
+                  <strong>Vistorias</strong> — registrar inspecao e evidencias
+                </li>
+                <li>
+                  <strong>Planos de acao</strong> — acompanhar nao conformidades
+                </li>
+                <li>
+                  <strong>Documentos</strong> — formalizar auto ou notificacao
+                </li>
+              </ol>
+              <p className="mt-3 text-xs font-semibold text-slate-500">No painel, abra a secao de fluxo para ir a cada etapa com um toque.</p>
+            </div>
           </div>
         </Card>
       </section>
@@ -1270,7 +1435,109 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
   )
 }
 
-function Dashboard({ data, maps }: { data: AppData; maps: AppMaps }) {
+function DashboardWorkflowStrip({
+  currentUser,
+  permittedPageIds,
+  onNavigate,
+}: {
+  currentUser: User
+  permittedPageIds: Set<Page>
+  onNavigate: (page: Page) => void
+}) {
+  const gestorFlow: Array<{ page: Page; title: string; desc: string }> = [
+    { page: 'dashboard', title: 'Painel', desc: 'Resumo do dia e graficos' },
+    { page: 'denuncias', title: 'Denuncias', desc: 'Triagem de protocolos' },
+    { page: 'vistorias', title: 'Vistorias', desc: 'Inspecao em campo' },
+    { page: 'planos', title: 'Planos de acao', desc: 'Adequacao de NCs' },
+    { page: 'documentos', title: 'Documentos', desc: 'Autos e notificacoes' },
+    { page: 'chamados', title: 'Chamados', desc: 'Fila operacional' },
+  ]
+
+  const adminExtra: Array<{ page: Page; title: string; desc: string }> = [
+    { page: 'roteiros', title: 'Roteiros', desc: 'Perguntas e areas de servico' },
+    { page: 'cadastros', title: 'Cadastros', desc: 'Locais e categorias' },
+    { page: 'auditoria', title: 'Auditoria', desc: 'Log e sincronizacao' },
+  ]
+
+  const executorFlow: Array<{ page: Page; title: string; desc: string }> = [
+    { page: 'dashboard', title: 'Painel', desc: 'Indicadores rapidos' },
+    { page: 'chamados', title: 'Chamados', desc: 'Executar servicos' },
+    { page: 'planos', title: 'Planos de acao', desc: 'Evidencias de NC' },
+    { page: 'impressao', title: 'Impressao', desc: 'Bluetooth em campo' },
+  ]
+
+  const consultaFlow: Array<{ page: Page; title: string; desc: string }> = [
+    { page: 'dashboard', title: 'Painel', desc: 'Visao geral' },
+    { page: 'denuncias', title: 'Denuncias', desc: 'Acompanhamento' },
+    { page: 'chamados', title: 'Chamados', desc: 'Status das demandas' },
+    { page: 'planos', title: 'Planos de acao', desc: 'NCs e prazos' },
+    { page: 'documentos', title: 'Documentos', desc: 'Consulta de autos' },
+    { page: 'relatorios', title: 'Relatorios', desc: 'Exportar CSV' },
+  ]
+
+  const steps =
+    currentUser.role === 'admin'
+      ? [...gestorFlow, ...adminExtra]
+      : currentUser.role === 'gestor'
+        ? gestorFlow
+        : currentUser.role === 'executor'
+          ? executorFlow
+          : consultaFlow
+
+  const visible = steps.filter((step) => permittedPageIds.has(step.page))
+
+  if (visible.length === 0) {
+    return null
+  }
+
+  return (
+    <Card className="border-sky-200 bg-gradient-to-br from-sky-50/90 via-white to-white">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
+            <Sparkles size={14} className="shrink-0 text-blue-500" aria-hidden />
+            Fluxo de trabalho
+          </p>
+          <h3 className="mt-2 text-lg font-black text-slate-900">Por onde continuar</h3>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+            O menu esta agrupado nas mesmas etapas da fiscalizacao: planejamento, campo, cidadao e demandas. Toque em uma etapa para abrir a tela.
+          </p>
+        </div>
+      </div>
+      <ul className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        {visible.map((step, index) => (
+          <li key={`${step.page}-${index}`}>
+            <button
+              type="button"
+              onClick={() => onNavigate(step.page)}
+              className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-200 hover:bg-blue-50/60"
+            >
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-sm font-black text-white">{index + 1}</span>
+              <span className="min-w-0">
+                <span className="block font-bold text-slate-900">{step.title}</span>
+                <span className="mt-0.5 block text-xs font-semibold leading-snug text-slate-600">{step.desc}</span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  )
+}
+
+function Dashboard({
+  data,
+  maps,
+  currentUser,
+  onNavigate,
+  permittedPageIds,
+}: {
+  data: AppData
+  maps: AppMaps
+  currentUser: User
+  onNavigate: (page: Page) => void
+  permittedPageIds: Set<Page>
+}) {
   const statusData = Object.entries(
     data.tickets.reduce<Record<string, number>>((acc, ticket) => {
       acc[ticket.status] = (acc[ticket.status] ?? 0) + 1
@@ -1303,7 +1570,12 @@ function Dashboard({ data, maps }: { data: AppData; maps: AppMaps }) {
 
   return (
     <div className="space-y-6">
-      <SectionTitle eyebrow="Visao geral" title="Painel gerencial" description="Indicadores de vistorias, chamados, prazos e desempenho operacional." />
+      <DashboardWorkflowStrip currentUser={currentUser} permittedPageIds={permittedPageIds} onNavigate={onNavigate} />
+      <SectionTitle
+        eyebrow="Visao geral"
+        title="Painel gerencial"
+        description="Indicadores de vistorias, chamados, denuncias e documentos. Use o fluxo acima para navegar com menos cliques."
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard icon={<ClipboardCheck />} label="Vistorias realizadas" value={data.inspections.filter((item) => item.status === 'Finalizada').length} tone="blue" />
