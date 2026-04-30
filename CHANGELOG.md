@@ -16,6 +16,17 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/), e o
 
 ---
 
+## [0.1.2] — 2026-04-30
+
+### Corrigido
+
+- **Logo**: marca empacotada pelo Vite (`src/assets/prefeitura-marca.svg`) para o `src` da imagem não depender só de arquivo estático na raiz (evita imagem quebrada em alguns deploys).
+- **Cores institucionais**: paleta em `@theme` (`pref`, `pref-hover`, `pref-accent`) com utilitarios `bg-pref`, `text-pref`, etc., garantindo que a folha de estilo gerada traga sempre os tokens da marca.
+- **PWA / service worker**: cache `v2`; pedidos a **`/assets/*`** usam **rede primeiro** e depois atualizam o cache, evitando folhas CSS antigas sem a paleta nova após deploy.
+- **Servidor**: se `index.html` nao for encontrado pelo caminho relativo ao modulo compilado, tenta `process.cwd()/dist/client` e registra o caminho usado no log de subida.
+
+---
+
 ## [0.1.1] — 2026-04-30
 
 ### Adicionado
@@ -75,7 +86,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/), e o
 
 ---
 
-<!-- Ao publicar no GitHub, crie tags v0.1.1, v0.1.0 e ajuste os links abaixo se desejar. -->
-[Unreleased]: https://github.com/leandroborgeseng/os/compare/v0.1.1...HEAD
+<!-- Ao publicar no GitHub, crie tags conforme versoes e ajuste os links abaixo se desejar. -->
+[Unreleased]: https://github.com/leandroborgeseng/os/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/leandroborgeseng/os/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/leandroborgeseng/os/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/leandroborgeseng/os/tree/v0.1.0

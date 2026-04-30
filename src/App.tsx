@@ -378,7 +378,7 @@ function Card({ children, className, id }: { children: ReactNode; className?: st
 function SectionTitle({ eyebrow, title, description }: { eyebrow?: string; title: string; description?: string }) {
   return (
     <div>
-      {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">{eyebrow}</p>}
+      {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.2em] text-pref">{eyebrow}</p>}
       <h2 className="mt-1 text-xl font-bold text-slate-950 sm:text-2xl">{title}</h2>
       {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
     </div>
@@ -407,7 +407,7 @@ function EmptyState({ title, text, ctaLabel, onCta }: { title: string; text: str
       {ctaLabel && onCta && (
         <button
           type="button"
-          className="mt-5 inline-flex items-center justify-center rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white shadow-md shadow-[#0066B3]/20 transition hover:bg-[#005a9e]"
+          className="mt-5 inline-flex items-center justify-center rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white shadow-md shadow-pref/20 transition hover:bg-pref-hover"
           onClick={onCta}
         >
           {ctaLabel}
@@ -470,7 +470,7 @@ function CitizenReportFlowTracker({
           <div
             className={clsx(
               'relative z-10 grid size-10 shrink-0 place-items-center rounded-full text-sm font-black',
-              step.done ? 'bg-emerald-100 text-emerald-800' : current ? 'bg-[#0066B3] text-white shadow-md shadow-[#0066B3]/25' : 'bg-slate-200 text-slate-600',
+              step.done ? 'bg-emerald-100 text-emerald-800' : current ? 'bg-pref text-white shadow-md shadow-pref/25' : 'bg-slate-200 text-slate-600',
             )}
           >
             {step.done ? <CheckCircle2 size={20} /> : index + 1}
@@ -728,7 +728,7 @@ function MapPicker({ value, onChange }: { value?: Coordinates | null; onChange: 
             <p className="text-sm font-bold text-slate-900">Geolocalizacao da vistoria</p>
             <p className="text-xs text-slate-500">Busque por endereco/CEP, toque no mapa ou use o GPS do dispositivo.</p>
           </div>
-          <button type="button" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0066B3] px-4 py-3 text-sm font-bold text-white" onClick={locate}>
+          <button type="button" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-pref px-4 py-3 text-sm font-bold text-white" onClick={locate}>
             <MapPin size={16} />
             Usar minha localizacao
           </button>
@@ -999,7 +999,7 @@ function App() {
                       }}
                       className={clsx(
                         'flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-semibold transition',
-                        activePage === page.id ? 'bg-[#0066B3] text-white shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-white/10 hover:text-white',
+                        activePage === page.id ? 'bg-pref text-white shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-white/10 hover:text-white',
                       )}
                     >
                       {page.icon}
@@ -1033,7 +1033,7 @@ function App() {
               <Menu size={20} />
             </button>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#0066B3]">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-pref">
                 {activePageMeta && <span>{navGroupMeta[activePageMeta.group].label}</span>}
                 {activePageMeta && (
                   <>
@@ -1048,14 +1048,14 @@ function App() {
               <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-slate-600">{activePageMeta?.hint}</p>
             </div>
             <div className="ml-auto hidden items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 md:flex">
-              <CalendarClock size={18} className="text-[#0066B3]" />
+              <CalendarClock size={18} className="text-pref" />
               <span className="text-sm font-semibold">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(new Date())}</span>
             </div>
             {installPrompt && (
               <button
                 type="button"
                 onClick={requestInstall}
-                className="inline-flex items-center gap-2 rounded-2xl bg-[#0066B3] px-3 py-3 text-sm font-bold text-white shadow-lg shadow-[#0066B3]/25 sm:px-4 sm:py-2"
+                className="inline-flex items-center gap-2 rounded-2xl bg-pref px-3 py-3 text-sm font-bold text-white shadow-lg shadow-pref/25 sm:px-4 sm:py-2"
               >
                 <Download size={16} />
                 <span className="hidden sm:inline">Instalar app</span>
@@ -1098,7 +1098,7 @@ function App() {
                   onClick={() => setActivePage(page.id)}
                   className={clsx(
                     'flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 text-[10px] font-bold leading-tight transition',
-                    activePage === page.id ? 'bg-[#0066B3] text-white' : 'text-slate-500 hover:bg-slate-100',
+                    activePage === page.id ? 'bg-pref text-white' : 'text-slate-500 hover:bg-slate-100',
                   )}
                 >
                   {page.icon}
@@ -1159,7 +1159,7 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
           <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4">
             <PrefeituraLogo size="sm" />
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">Prefeitura Municipal</p>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-pref">Prefeitura Municipal</p>
               <p className="text-sm font-semibold text-slate-600">Identifique-se para acessar o sistema</p>
             </div>
           </div>
@@ -1179,7 +1179,7 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
             </Field>
             <button
               type="button"
-              className="w-full rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#0066B3]/25 transition hover:bg-[#005a9e]"
+              className="w-full rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white shadow-lg shadow-pref/25 transition hover:bg-pref-hover"
               onClick={() => {
                 const user = data.users.find((item) => item.id === selectedUserId)
                 if (user) onLogin(user)
@@ -1189,7 +1189,7 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
             </button>
             <a
               href="/?portal=cidadao"
-              className="block w-full rounded-2xl border border-[#0066B3]/25 bg-sky-50 px-5 py-3 text-center text-sm font-bold text-[#0066B3] transition hover:bg-sky-100"
+              className="block w-full rounded-2xl border border-pref/25 bg-sky-50 px-5 py-3 text-center text-sm font-bold text-pref transition hover:bg-sky-100"
             >
               Registrar denuncia como cidadao
             </a>
@@ -1230,7 +1230,7 @@ function PublicDocumentConsult({ data, protocolRaw }: { data: AppData; protocolR
         <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
           <PrefeituraLogo size="md" />
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">Prefeitura Municipal</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-pref">Prefeitura Municipal</p>
             <h1 className="text-lg font-black text-slate-950">Consulta de documento oficial</h1>
           </div>
         </div>
@@ -1278,7 +1278,7 @@ function PublicDocumentConsult({ data, protocolRaw }: { data: AppData; protocolR
           </a>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-2xl bg-[#0066B3] px-4 py-3 text-center text-sm font-bold text-white shadow-sm"
+            className="inline-flex items-center justify-center rounded-2xl bg-pref px-4 py-3 text-center text-sm font-bold text-white shadow-sm"
           >
             Acesso administrativo
           </a>
@@ -1478,7 +1478,7 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
               <p className="text-sm font-bold">Geolocalizacao</p>
               <p className="mt-1 text-xs text-slate-500">No celular, permita o acesso ao GPS para enviar a localizacao aproximada da ocorrencia.</p>
               <div className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-slate-600">{formatCoordinates(form.coordinates)}</div>
-              <button type="button" className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-[#0066B3] px-4 py-3 text-sm font-bold text-white" onClick={captureLocation}>
+              <button type="button" className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-pref px-4 py-3 text-sm font-bold text-white" onClick={captureLocation}>
                 <MapPin size={16} />
                 Usar localizacao atual
               </button>
@@ -1518,7 +1518,7 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
               </div>
             )}
 
-            <button type="button" disabled={isSubmitting} onClick={submitReport} className="w-full rounded-2xl bg-[#0066B3] px-5 py-4 text-sm font-bold text-white shadow-lg shadow-[#0066B3]/25 disabled:opacity-50">
+            <button type="button" disabled={isSubmitting} onClick={submitReport} className="w-full rounded-2xl bg-pref px-5 py-4 text-sm font-bold text-white shadow-lg shadow-pref/25 disabled:opacity-50">
               Enviar denuncia
             </button>
             <a href="/" className="block text-center text-sm font-bold text-blue-700">Acessar area administrativa</a>
@@ -1588,7 +1588,7 @@ function DashboardWorkflowStrip({
     <Card className="border-sky-200 bg-gradient-to-br from-sky-50/90 via-white to-white">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-pref">
             <Sparkles size={14} className="shrink-0 text-blue-500" aria-hidden />
             Fluxo de trabalho
           </p>
@@ -1606,7 +1606,7 @@ function DashboardWorkflowStrip({
               onClick={() => onNavigate(step.page)}
               className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-200 hover:bg-blue-50/60"
             >
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#0066B3] text-sm font-black text-white">{index + 1}</span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-pref text-sm font-black text-white">{index + 1}</span>
               <span className="min-w-0">
                 <span className="block font-bold text-slate-900">{step.title}</span>
                 <span className="mt-0.5 block text-xs font-semibold leading-snug text-slate-600">{step.desc}</span>
@@ -1873,7 +1873,7 @@ function Registrations({
               </select>
             </Field>
           </div>
-          <button type="button" disabled={!canEdit} onClick={saveLocation} className="mt-4 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+          <button type="button" disabled={!canEdit} onClick={saveLocation} className="mt-4 rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
             {locationForm.id ? 'Salvar alteracoes' : 'Novo local'}
           </button>
 
@@ -1956,7 +1956,7 @@ function Registrations({
               </Field>
             </div>
           </div>
-          <button type="button" disabled={!canEdit} onClick={saveChecklist} className="mt-4 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+          <button type="button" disabled={!canEdit} onClick={saveChecklist} className="mt-4 rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
             {checklistForm.id ? 'Salvar item' : 'Novo item'}
           </button>
 
@@ -2194,7 +2194,7 @@ function InspectionScriptsAdmin({
             <Field label="Descricao">
               <textarea className={clsx(inputClass, 'min-h-24')} value={areaForm.description} onChange={(event) => setAreaForm({ ...areaForm, description: event.target.value })} />
             </Field>
-            <button type="button" disabled={!canEdit} onClick={saveArea} className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={!canEdit} onClick={saveArea} className="rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
               {areaForm.id ? 'Salvar area' : 'Adicionar area'}
             </button>
           </div>
@@ -2221,7 +2221,7 @@ function InspectionScriptsAdmin({
             <Field label="Descricao">
               <textarea className={clsx(inputClass, 'min-h-24')} value={typeForm.description} onChange={(event) => setTypeForm({ ...typeForm, description: event.target.value })} />
             </Field>
-            <button type="button" disabled={!canEdit} onClick={saveType} className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={!canEdit} onClick={saveType} className="rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
               {typeForm.id ? 'Salvar tipo' : 'Adicionar tipo'}
             </button>
           </div>
@@ -2262,7 +2262,7 @@ function InspectionScriptsAdmin({
             <Field label="Descricao">
               <textarea className={clsx(inputClass, 'min-h-24')} value={scriptForm.description} onChange={(event) => setScriptForm({ ...scriptForm, description: event.target.value })} />
             </Field>
-            <button type="button" disabled={!canEdit} onClick={saveScript} className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={!canEdit} onClick={saveScript} className="rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
               {scriptForm.id ? 'Salvar roteiro' : 'Adicionar roteiro'}
             </button>
           </div>
@@ -2374,7 +2374,7 @@ function InspectionScriptsAdmin({
                     </label>
                   ))}
                 </div>
-                <button type="button" disabled={!canEdit || selectedSections.length === 0} onClick={saveQuestion} className="mt-4 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+                <button type="button" disabled={!canEdit || selectedSections.length === 0} onClick={saveQuestion} className="mt-4 rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
                   {questionForm.id ? 'Salvar pergunta' : 'Adicionar pergunta'}
                 </button>
               </div>
@@ -2642,7 +2642,7 @@ function CitizenReportsAdmin({
               {canTriage && onNavigate && !selected.linkedInspectionId && selected.status !== 'Arquivada' && (
                 <button
                   type="button"
-                  className="mt-4 w-full rounded-2xl border border-[#0066B3]/25 bg-sky-50 px-4 py-3 text-sm font-bold text-[#0066B3] transition hover:bg-sky-100"
+                  className="mt-4 w-full rounded-2xl border border-pref/25 bg-sky-50 px-4 py-3 text-sm font-bold text-pref transition hover:bg-sky-100"
                   onClick={() => {
                     const url = new URL(window.location.href)
                     url.searchParams.set('vincularDenuncia', selected.id)
@@ -3078,7 +3078,7 @@ function Inspections({
           {finishHint.ncCount > 0 && (
             <button
               type="button"
-              className="w-full rounded-2xl bg-[#0066B3] px-4 py-3 text-sm font-bold text-white shadow-md shadow-[#0066B3]/20 transition hover:bg-[#005a9e]"
+              className="w-full rounded-2xl bg-pref px-4 py-3 text-sm font-bold text-white shadow-md shadow-pref/20 transition hover:bg-pref-hover"
               onClick={() => {
                 onNavigate?.('planos')
                 setFinishHint(null)
@@ -3249,7 +3249,7 @@ function Inspections({
                           onClick={() => updateAnswer(item.id, { status, openTicket: status === 'nao_conforme' ? answer?.openTicket ?? itemMeta.autoCreateTicket : false })}
                           className={clsx(
                             'rounded-2xl px-3 py-2 text-xs font-bold',
-                            answer?.status === status ? 'bg-[#0066B3] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                            answer?.status === status ? 'bg-pref text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                           )}
                         >
                           {status === 'conforme' ? 'Conforme' : status === 'nao_conforme' ? 'Nao conforme' : 'Nao se aplica'}
@@ -3320,7 +3320,7 @@ function Inspections({
             <button type="button" className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold" onClick={() => saveInspection('Rascunho')}>
               Salvar rascunho
             </button>
-            <button type="button" className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white" onClick={() => saveInspection('Finalizada')}>
+            <button type="button" className="rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white" onClick={() => saveInspection('Finalizada')}>
               Finalizar vistoria
             </button>
           </div>
@@ -3346,7 +3346,7 @@ function Inspections({
                     <p className="font-bold">{inspection.number}</p>
                     <p className="text-sm text-slate-500">{maps.locations[inspection.locationId]?.name}</p>
                     {linkedDenuncia && (
-                      <p className="mt-1 text-xs font-semibold text-[#0066B3]">Denuncia {linkedDenuncia.protocol}</p>
+                      <p className="mt-1 text-xs font-semibold text-pref">Denuncia {linkedDenuncia.protocol}</p>
                     )}
                   </div>
                   <Badge className={inspection.status === 'Finalizada' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>{inspection.status}</Badge>
@@ -4016,7 +4016,7 @@ function OfficialDocuments({
                 (issueSource === 'denuncia' && (!sourceCitizenReport || data.citizenReports.length === 0))
               }
               onClick={createDocument}
-              className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+              className="rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
               Gerar documento
             </button>
@@ -4054,7 +4054,7 @@ function OfficialDocuments({
                   <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
                     <PrefeituraLogo size="md" />
                     <div className="min-w-0">
-                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">Prefeitura Municipal</p>
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-pref">Prefeitura Municipal</p>
                       <h3 className="mt-1 text-2xl font-black">{selectedDocument.type}</h3>
                       <p className="text-sm font-semibold text-slate-500">{selectedDocument.number}</p>
                     </div>
@@ -4159,7 +4159,7 @@ function OfficialDocuments({
                       type="button"
                       disabled={!bluetoothAvailable || printerHint.state === 'printing'}
                       onClick={() => void printViaBluetooth(selectedDocument)}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-[#0066B3] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-2xl bg-pref px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                     >
                       <Printer size={16} />
                       Impressora Bluetooth
@@ -4368,7 +4368,7 @@ function Tickets({
           <Field label="Descricao do problema">
             <textarea className={clsx(inputClass, 'min-h-24')} value={manualForm.description} onChange={(event) => setManualForm({ ...manualForm, description: event.target.value })} />
           </Field>
-          <button type="button" className="mt-4 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white" onClick={createManualTicket}>
+          <button type="button" className="mt-4 rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white" onClick={createManualTicket}>
             Abrir chamado
           </button>
         </Card>
@@ -4627,7 +4627,7 @@ function PrintSettings() {
             )}
 
             <div className="flex flex-wrap gap-3">
-              <button type="button" disabled={!bluetoothSupported || status === 'printing'} onClick={testPrint} className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+              <button type="button" disabled={!bluetoothSupported || status === 'printing'} onClick={testPrint} className="rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
                 {status === 'printing' ? 'Imprimindo...' : 'Conectar e imprimir teste'}
               </button>
               <button type="button" onClick={() => window.print()} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold">
@@ -4698,7 +4698,7 @@ function Reports({ data, maps }: { data: AppData; maps: AppMaps }) {
     <div className="space-y-6">
       <SectionTitle eyebrow="Gestao" title="Relatorios" description="Exportacoes iniciais do MVP. A impressao do navegador atende o relatorio em PDF no prototipo." />
       <div className="flex flex-wrap gap-3">
-        <button type="button" onClick={exportCsv} className="inline-flex items-center gap-2 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white">
+        <button type="button" onClick={exportCsv} className="inline-flex items-center gap-2 rounded-2xl bg-pref px-5 py-3 text-sm font-bold text-white">
           <Download size={16} />
           Exportar chamados CSV/Excel
         </button>

@@ -1,4 +1,5 @@
 import express from 'express'
+import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { PrismaPg } from '@prisma/adapter-pg'
@@ -128,7 +129,21 @@ app.post('/api/app-data/reset', async (_request, response, next) => {
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const clientDistPath = path.resolve(__dirname, '../../client')
+
+function resolveClientDistPath() {
+  const fromModule = path.resolve(__dirname, '../../client')
+  if (fs.existsSync(path.join(fromModule, 'index.html'))) {
+    return fromModule
+  }
+  const fromCwd = path.join(process.cwd(), 'dist', 'client')
+  if (fs.existsSync(path.join(fromCwd, 'index.html'))) {
+    return fromCwd
+  }
+  console.warn(`[static] index.html nao encontrado em ${fromModule} nem em ${fromCwd}; usando ${fromModule}`)
+  return fromModule
+}
+
+const clientDistPath = resolveClientDistPath()
 
 app.use(express.static(clientDistPath))
 app.get(/.*/, (_request, response) => {
@@ -142,5 +157,5 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
 })
 
 app.listen(port, () => {
-  console.log(`Servidor iniciado na porta ${port}`)
+  console.log(`Servidor iniciado na porta ${port} (static: ${clientDistPath})`)
 })

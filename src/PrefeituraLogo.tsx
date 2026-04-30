@@ -1,10 +1,12 @@
 import { clsx } from 'clsx'
 
+import marcaUrl from './assets/prefeitura-marca.svg?url'
+
 const sizesPx = { sm: 40, md: 48, lg: 56, xl: 72 } as const
 
 export type PrefeituraLogoSize = keyof typeof sizesPx
 
-/** Marca institucional (SVG em /prefeitura-marca.svg) nas cores #0066B3 e #2DBE10. Substitua o arquivo em `public/` pelo brasao oficial quando houver. */
+/** Marca institucional: SVG empacotado pelo Vite (funciona em producao). Substituir `src/assets/prefeitura-marca.svg` pelo brasao oficial quando houver. */
 export function PrefeituraLogo({
   size = 'md',
   className,
@@ -19,7 +21,7 @@ export function PrefeituraLogo({
 
   return (
     <img
-      src="/prefeitura-marca.svg"
+      src={marcaUrl}
       width={s}
       height={s}
       alt={alt}

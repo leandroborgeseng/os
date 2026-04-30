@@ -1,6 +1,6 @@
 # Manual do sistema — Vistorias, chamados e fiscalização municipal
 
-Versão do manual: **0.1.1** (alinhada à versão `0.1.1` do changelog; atualize ambos a cada entrega.)
+Versão do manual: **0.1.2** (alinhada à versão `0.1.2` do changelog; atualize ambos a cada entrega.)
 
 Este documento descreve as **funcionalidades já implementadas** no MVP, do ponto de vista de quem usa o sistema (gestores, fiscais, equipes e cidadãos). Para desenvolvedores: veja também `README.md`, `CHANGELOG.md` e `docs/ITERACOES.md`.
 

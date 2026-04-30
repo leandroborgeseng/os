@@ -1,4 +1,4 @@
-const CACHE_NAME = 'prefeitura-vistorias-v1'
+const CACHE_NAME = 'prefeitura-vistorias-v2'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/pwa-icon.svg', '/favicon.svg']
 
 self.addEventListener('install', (event) => {
@@ -22,12 +22,32 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
 
+  const url = new URL(event.request.url)
+
+  /* Hashed assets: rede primeiro para sempre pegar CSS/JS novos após deploy; evita cores antigas em cache. */
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy))
+          }
+          return response
+        })
+        .catch(() => caches.match(event.request)),
+    )
+    return
+  }
+
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
-          const copy = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put('/', copy))
+          if (response.ok) {
+            const copy = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put('/', copy))
+          }
           return response
         })
         .catch(() => caches.match('/')),
