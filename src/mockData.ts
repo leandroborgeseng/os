@@ -114,6 +114,129 @@ const baseTickets: Ticket[] = [
   },
 ]
 
+const seedPhotoAttachment = {
+  id: 'att-seed-licenca',
+  name: 'evidencia-licenca.png',
+  dataUrl:
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  createdAt: daysAgo(4),
+}
+
+const seedInspection = {
+  id: 'insp-seed-2026',
+  number: 'VIS-2026-0001',
+  createdAt: daysAgo(5),
+  finalizedAt: daysAgo(4),
+  inspectorId: 'user-2',
+  serviceAreaId: 'area-vigilancia-sanitaria',
+  inspectionTypeId: 'type-restaurante',
+  scriptId: 'script-vs-restaurante-v1',
+  sectorId: 'set-1',
+  locationId: 'loc-1',
+  categoryId: 'cat-1',
+  status: 'Finalizada' as const,
+  generalNotes: 'Vistoria de demonstracao — restaurante com pendencia documental.',
+  coordinates: { latitude: -23.561684, longitude: -46.656139, accuracy: 12, capturedAt: daysAgo(4) },
+  answers: [
+    {
+      checklistItemId: 'q-vs-licenca',
+      status: 'nao_conforme' as const,
+      notes: 'Licenca sanitaria apresentada esta vencida.',
+      photos: [seedPhotoAttachment],
+      openTicket: true,
+    },
+    {
+      checklistItemId: 'q-vs-manipulacao',
+      status: 'conforme' as const,
+      notes: 'Manipuladores com uniformes e higiene adequados.',
+      photos: [],
+      openTicket: false,
+    },
+    {
+      checklistItemId: 'q-vs-validade',
+      status: 'conforme' as const,
+      notes: 'Produtos dentro da validade.',
+      photos: [],
+      openTicket: false,
+    },
+    {
+      checklistItemId: 'q-vs-agua',
+      status: 'conforme' as const,
+      notes: 'Abastecimento e reservatorio regularizados.',
+      photos: [],
+      openTicket: false,
+    },
+  ],
+}
+
+const seedNonConformity = {
+  id: 'nc-seed-2026',
+  number: 'NC-2026-0001',
+  inspectionId: 'insp-seed-2026',
+  checklistItemId: 'q-vs-licenca',
+  serviceAreaId: 'area-vigilancia-sanitaria',
+  inspectionTypeId: 'type-restaurante',
+  scriptId: 'script-vs-restaurante-v1',
+  locationId: 'loc-1',
+  sectorId: 'set-1',
+  categoryId: 'cat-1',
+  title: 'Licenca sanitaria vigente apresentada no local',
+  description: 'Licenca sanitaria apresentada esta vencida.',
+  criticality: 'Alta' as const,
+  legalReference: 'Legislacao sanitaria municipal aplicavel.',
+  dueDate: daysFromNow(10),
+  status: 'Aberta' as const,
+  responsibleTeamId: 'team-1',
+  createdAt: daysAgo(4),
+  updatedAt: daysAgo(4),
+  createdBy: 'user-2',
+  evidence: [seedPhotoAttachment],
+  history: [
+    {
+      id: 'hist-nc-seed-1',
+      at: daysAgo(4),
+      userId: 'user-2',
+      to: 'Aberta' as const,
+      note: 'Nao conformidade gerada automaticamente pela vistoria VIS-2026-0001.',
+    },
+  ],
+}
+
+const seedCitizenReport = {
+  id: 'den-seed-2026',
+  protocol: 'DEN-2026-0001',
+  createdAt: daysAgo(2),
+  updatedAt: daysAgo(1),
+  status: 'Em triagem' as const,
+  categoryId: 'cat-4',
+  serviceAreaId: 'area-obras',
+  title: 'Deposito irregular de residuos na Praca Central',
+  description:
+    'Sacos de lixo e entulho se acumulam ha dias proximo ao ponto de onibus, com odor e risco a saude publica.',
+  address: 'Av. Brasil, Praca Central (proximo ao ponto de onibus)',
+  coordinates: { latitude: -23.55052, longitude: -46.63331, capturedAt: daysAgo(2) },
+  anonymous: false,
+  citizenName: 'Paula Mendes',
+  citizenContact: '(11) 98888-7766',
+  attachments: [],
+  history: [
+    {
+      id: 'hist-den-seed-1',
+      at: daysAgo(2),
+      status: 'Recebida' as const,
+      note: 'Denuncia recebida pelo portal do cidadao.',
+      userId: undefined,
+    },
+    {
+      id: 'hist-den-seed-2',
+      at: daysAgo(1),
+      status: 'Em triagem' as const,
+      note: 'Encaminhada para analise da equipe de zeladoria.',
+      userId: 'user-2',
+    },
+  ],
+}
+
 export const initialData: AppData = {
   users: [
     { id: 'user-1', name: 'Marina Costa', email: 'admin@prefeitura.local', role: 'admin' },
@@ -326,10 +449,10 @@ export const initialData: AppData = {
     { id: 'team-1', name: 'Equipe de Manutencao Predial', sectorId: 'set-1', lead: 'Joao Pereira' },
     { id: 'team-2', name: 'Equipe Eletrica', sectorId: 'set-2', lead: 'Ana Martins' },
   ],
-  inspections: [],
+  inspections: [seedInspection],
   tickets: baseTickets,
-  nonConformities: [],
-  citizenReports: [],
+  nonConformities: [seedNonConformity],
+  citizenReports: [seedCitizenReport],
   citizenReportGroups: [],
   officialDocuments: [],
   notifications: [

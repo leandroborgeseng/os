@@ -997,7 +997,7 @@ function PublicDocumentConsult({ data, protocolRaw }: { data: AppData; protocolR
                 <Info label="Numero" value={found.number} />
                 <Info label="Situacao" value={found.status} />
                 <Info label="Emitido em" value={formatDate(found.createdAt)} />
-                <Info label="Local vinculado" value={location?.name} />
+                <Info label="Local vinculado" value={location?.name ?? found.externalAddress} />
                 <Info label="Area de servico" value={area?.name} />
               </div>
               {found.printedAt && <Info label="Ultima impressao registrada" value={formatDate(found.printedAt)} />}
@@ -1310,6 +1310,23 @@ function Dashboard({ data, maps }: { data: AppData; maps: AppMaps }) {
         <MetricCard icon={<TicketCheck />} label="Chamados abertos" value={data.tickets.length} tone="teal" />
         <MetricCard icon={<AlertTriangle />} label="Chamados vencidos" value={data.tickets.filter(isOverdue).length} tone="rose" />
         <MetricCard icon={<CheckCircle2 />} label="% concluidos/validados" value={`${Math.round((resolved / Math.max(1, data.tickets.length)) * 100)}%`} tone="emerald" />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          icon={<AlertTriangle />}
+          label="Nao conformidades ativas"
+          value={data.nonConformities.filter((item) => !['Validada', 'Cancelada'].includes(item.status)).length}
+          tone="amber"
+        />
+        <MetricCard
+          icon={<MapPin />}
+          label="Denuncias em andamento"
+          value={data.citizenReports.filter((item) => !['Concluida', 'Arquivada'].includes(item.status)).length}
+          tone="blue"
+        />
+        <MetricCard icon={<FileText />} label="Documentos emitidos" value={data.officialDocuments.length} tone="teal" />
+        <MetricCard icon={<Search />} label="Casos agrupados (denuncias)" value={data.citizenReportGroups.length} tone="emerald" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
@@ -3105,10 +3122,13 @@ function OfficialDocuments({
 }) {
   const [selectedDocumentId, setSelectedDocumentId] = useState(data.officialDocuments[0]?.id ?? '')
   const [sourceNonConformityId, setSourceNonConformityId] = useState(data.nonConformities[0]?.id ?? '')
+  const [sourceCitizenReportId, setSourceCitizenReportId] = useState(data.citizenReports[0]?.id ?? '')
+  const [issueSource, setIssueSource] = useState<'nc' | 'denuncia'>(() => (data.nonConformities.length > 0 ? 'nc' : 'denuncia'))
   const [documentType, setDocumentType] = useState<OfficialDocumentType>('Auto de Infracao')
   const [signatureForm, setSignatureForm] = useState({ signerName: '', signerDocument: '', notes: '' })
   const selectedDocument = data.officialDocuments.find((document) => document.id === selectedDocumentId) ?? data.officialDocuments[0]
   const sourceNonConformity = data.nonConformities.find((item) => item.id === sourceNonConformityId)
+  const sourceCitizenReport = data.citizenReports.find((item) => item.id === sourceCitizenReportId)
   const canIssue = ['admin', 'gestor'].includes(currentUser.role)
   type PrinterHint = 'idle' | 'printing' | 'success' | 'error'
   const [printerHint, setPrinterHint] = useState<{ state: PrinterHint; text: string }>({ state: 'idle', text: '' })
@@ -3119,7 +3139,7 @@ function OfficialDocuments({
     number: document.number,
     status: document.status,
     issuedAtLabel: new Date(document.createdAt).toLocaleString('pt-BR'),
-    locationLabel: maps.locations[document.locationId ?? '']?.name ?? '-',
+    locationLabel: maps.locations[document.locationId ?? '']?.name ?? document.externalAddress ?? '-',
     areaLabel: maps.serviceAreas[document.serviceAreaId ?? '']?.name ?? '-',
     facts: document.facts,
     legalBasis: document.legalBasis,
@@ -3129,13 +3149,87 @@ function OfficialDocuments({
   })
 
   const createDocument = () => {
-    if (!sourceNonConformity) return
-
     const now = new Date().toISOString()
-    const inspection = data.inspections.find((item) => item.id === sourceNonConformity.inspectionId)
-    const location = maps.locations[sourceNonConformity.locationId]
     const number = nextProtocol('DOC', data.officialDocuments.map((item) => item.number))
-    const legalBasis = sourceNonConformity.legalReference || 'Legislacao municipal aplicavel e normas correlatas.'
+
+    const measuresForType =
+      documentType === 'Auto de Infracao'
+        ? 'Lavrar auto de infracao, concedendo prazo legal para defesa e providencias cabiveis.'
+        : documentType === 'Interdicao'
+          ? 'Determinar interdicao cautelar ate saneamento do risco identificado e posterior validacao fiscal.'
+          : 'Notificar o responsavel para regularizacao dentro do prazo definido.'
+
+    if (issueSource === 'nc') {
+      if (!sourceNonConformity) return
+
+      const inspection = data.inspections.find((item) => item.id === sourceNonConformity.inspectionId)
+      const location = maps.locations[sourceNonConformity.locationId]
+      const legalBasis = sourceNonConformity.legalReference || 'Legislacao municipal aplicavel e normas correlatas.'
+      const document: OfficialDocument = {
+        id: makeId('doc'),
+        number,
+        type: documentType,
+        status: 'Gerado',
+        createdAt: now,
+        updatedAt: now,
+        createdBy: currentUser.id,
+        inspectionId: sourceNonConformity.inspectionId,
+        nonConformityId: sourceNonConformity.id,
+        citizenReportId: undefined,
+        locationId: sourceNonConformity.locationId,
+        externalAddress: undefined,
+        serviceAreaId: sourceNonConformity.serviceAreaId,
+        title: `${documentType} - ${sourceNonConformity.title}`,
+        facts: `Durante a vistoria ${inspection?.number ?? sourceNonConformity.inspectionId}, realizada em ${location?.name ?? 'local informado'}, foi constatada a seguinte irregularidade: ${sourceNonConformity.description}`,
+        legalBasis,
+        measures: measuresForType,
+        defenseDeadlineDays: documentType === 'Auto de Infracao' ? 15 : undefined,
+        regularizationDeadlineDays: Math.max(1, Math.ceil((new Date(sourceNonConformity.dueDate).getTime() - Date.now()) / 86400000)),
+        penalty: documentType === 'Auto de Infracao' ? 'Advertencia, multa e demais penalidades previstas na legislacao aplicavel.' : undefined,
+        coordinates: inspection?.coordinates ?? undefined,
+        signatures: [
+          {
+            id: makeId('assinatura'),
+            signedAt: now,
+            signerName: currentUser.name,
+            signerRole: 'Fiscal',
+            method: 'Sistema',
+            notes: 'Documento emitido pelo fiscal responsavel no sistema.',
+          },
+        ],
+        qrCodePayload: `${window.location.origin}/?documento=${encodeURIComponent(number)}`,
+      }
+
+      commit(
+        (draft) => ({
+          ...draft,
+          officialDocuments: [document, ...draft.officialDocuments],
+          notifications: [
+            {
+              id: makeId('notif'),
+              title: 'Documento oficial gerado',
+              message: `${document.number} foi gerado para ${sourceNonConformity.number}.`,
+              createdAt: now,
+              read: false,
+            },
+            ...draft.notifications,
+          ],
+        }),
+        'Gerou documento oficial',
+        'documentos',
+        document.id,
+        `${document.number} gerado a partir de ${sourceNonConformity.number}.`,
+      )
+      setSelectedDocumentId(document.id)
+      return
+    }
+
+    if (!sourceCitizenReport) return
+
+    const report = sourceCitizenReport
+    const linkedInspection = report.linkedInspectionId ? data.inspections.find((item) => item.id === report.linkedInspectionId) : undefined
+    const issued = new Date(report.createdAt).toLocaleString('pt-BR')
+    const reporterLine = report.anonymous ? 'Denunciante optou por anonimato no portal.' : `Identificacao informada: ${report.citizenName ?? '—'}${report.citizenContact ? ` • ${report.citizenContact}` : ''}.`
     const document: OfficialDocument = {
       id: makeId('doc'),
       number,
@@ -3144,23 +3238,21 @@ function OfficialDocuments({
       createdAt: now,
       updatedAt: now,
       createdBy: currentUser.id,
-      inspectionId: sourceNonConformity.inspectionId,
-      nonConformityId: sourceNonConformity.id,
-      locationId: sourceNonConformity.locationId,
-      serviceAreaId: sourceNonConformity.serviceAreaId,
-      title: `${documentType} - ${sourceNonConformity.title}`,
-      facts: `Durante a vistoria ${inspection?.number ?? sourceNonConformity.inspectionId}, realizada em ${location?.name ?? 'local informado'}, foi constatada a seguinte irregularidade: ${sourceNonConformity.description}`,
-      legalBasis,
-      measures:
-        documentType === 'Auto de Infracao'
-          ? 'Lavrar auto de infracao, concedendo prazo legal para defesa e providencias cabiveis.'
-          : documentType === 'Interdicao'
-            ? 'Determinar interdicao cautelar ate saneamento do risco identificado e posterior validacao fiscal.'
-            : 'Notificar o responsavel para regularizacao dentro do prazo definido.',
+      inspectionId: report.linkedInspectionId,
+      nonConformityId: undefined,
+      citizenReportId: report.id,
+      locationId: undefined,
+      externalAddress: report.address,
+      serviceAreaId: report.serviceAreaId,
+      title: `${documentType} - ${report.title}`,
+      facts: `Em face da denuncia registrada sob o protocolo ${report.protocol} em ${issued}, com referencia ao local: ${report.address}. ${reporterLine} Resumo da ocorrencia: ${report.description}`,
+      legalBasis:
+        'Lei organica municipal, codigos de posturas e legislacao correlata aplicavel a fiscalizacao de reclamacoes e a preservacao da ordem urbanística e sanitária.',
+      measures: measuresForType,
       defenseDeadlineDays: documentType === 'Auto de Infracao' ? 15 : undefined,
-      regularizationDeadlineDays: Math.max(1, Math.ceil((new Date(sourceNonConformity.dueDate).getTime() - Date.now()) / 86400000)),
+      regularizationDeadlineDays: 30,
       penalty: documentType === 'Auto de Infracao' ? 'Advertencia, multa e demais penalidades previstas na legislacao aplicavel.' : undefined,
-      coordinates: inspection?.coordinates ?? undefined,
+      coordinates: report.coordinates ?? linkedInspection?.coordinates ?? undefined,
       signatures: [
         {
           id: makeId('assinatura'),
@@ -3168,7 +3260,7 @@ function OfficialDocuments({
           signerName: currentUser.name,
           signerRole: 'Fiscal',
           method: 'Sistema',
-          notes: 'Documento emitido pelo fiscal responsavel no sistema.',
+          notes: 'Documento emitido pelo fiscal responsavel com base em denuncia cidada.',
         },
       ],
       qrCodePayload: `${window.location.origin}/?documento=${encodeURIComponent(number)}`,
@@ -3182,7 +3274,7 @@ function OfficialDocuments({
           {
             id: makeId('notif'),
             title: 'Documento oficial gerado',
-            message: `${document.number} foi gerado para ${sourceNonConformity.number}.`,
+            message: `${document.number} foi gerado a partir da denuncia ${report.protocol}.`,
             createdAt: now,
             read: false,
           },
@@ -3192,7 +3284,7 @@ function OfficialDocuments({
       'Gerou documento oficial',
       'documentos',
       document.id,
-      `${document.number} gerado a partir de ${sourceNonConformity.number}.`,
+      `${document.number} gerado a partir de denuncia ${report.protocol}.`,
     )
     setSelectedDocumentId(document.id)
   }
@@ -3270,21 +3362,61 @@ function OfficialDocuments({
 
   return (
     <div className="space-y-6">
-      <SectionTitle eyebrow="Fiscalizacao" title="Documentos oficiais" description="Gere autos, notificacoes, interdicoes e relatorios vinculados a vistorias e nao conformidades." />
+      <SectionTitle eyebrow="Fiscalizacao" title="Documentos oficiais" description="Gere autos e notificacoes a partir de nao conformidades de vistoria ou de denuncias do portal do cidada." />
 
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <Card>
-          <SectionTitle title="Emitir documento" description="Selecione uma nao conformidade e o tipo de documento oficial." />
+          <SectionTitle title="Emitir documento" description="Escolha a origem (fiscalizacao em campo ou denuncia), depois o registro e o tipo de documento." />
           <div className="mt-5 space-y-4">
-            <Field label="Nao conformidade">
-              <select className={inputClass} value={sourceNonConformityId} onChange={(event) => setSourceNonConformityId(event.target.value)}>
-                {data.nonConformities.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.number} - {item.title}
-                  </option>
-                ))}
+            <Field label="Origem">
+              <select
+                className={inputClass}
+                value={issueSource}
+                onChange={(event) => setIssueSource(event.target.value as 'nc' | 'denuncia')}
+              >
+                <option value="nc">Nao conformidade (vistoria)</option>
+                <option value="denuncia">Denuncia do cidada</option>
               </select>
             </Field>
+
+            {issueSource === 'nc' ? (
+              <>
+                {data.nonConformities.length === 0 ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                    Nao ha nao conformidades cadastradas. Finalize uma vistoria com itens nao conformes ou aguarde dados de campo.
+                  </div>
+                ) : (
+                  <Field label="Nao conformidade">
+                    <select className={inputClass} value={sourceNonConformityId} onChange={(event) => setSourceNonConformityId(event.target.value)}>
+                      {data.nonConformities.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.number} - {item.title}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </>
+            ) : (
+              <>
+                {data.citizenReports.length === 0 ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+                    Nao ha denuncias recebidas. Divulgue o portal do cidada ou aguarde novos protocolos.
+                  </div>
+                ) : (
+                  <Field label="Denuncia">
+                    <select className={inputClass} value={sourceCitizenReportId} onChange={(event) => setSourceCitizenReportId(event.target.value)}>
+                      {data.citizenReports.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.protocol} - {item.title} ({item.status})
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+              </>
+            )}
+
             <Field label="Tipo de documento">
               <select className={inputClass} value={documentType} onChange={(event) => setDocumentType(event.target.value as OfficialDocumentType)}>
                 {(['Auto de Infracao', 'Notificacao', 'Interdicao', 'Apreensao', 'Embargo', 'Relatorio de Vistoria'] as OfficialDocumentType[]).map((type) => (
@@ -3292,14 +3424,25 @@ function OfficialDocuments({
                 ))}
               </select>
             </Field>
-            <button type="button" disabled={!canIssue || !sourceNonConformity} onClick={createDocument} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+            <button
+              type="button"
+              disabled={
+                !canIssue ||
+                (issueSource === 'nc' && (!sourceNonConformity || data.nonConformities.length === 0)) ||
+                (issueSource === 'denuncia' && (!sourceCitizenReport || data.citizenReports.length === 0))
+              }
+              onClick={createDocument}
+              className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+            >
               Gerar documento
             </button>
           </div>
 
           <div className="mt-6 space-y-3">
             <p className="text-sm font-bold text-slate-900">Documentos recentes</p>
-            {data.officialDocuments.length === 0 && <EmptyState title="Nenhum documento emitido" text="Gere o primeiro documento a partir de uma nao conformidade." />}
+            {data.officialDocuments.length === 0 && (
+              <EmptyState title="Nenhum documento emitido" text="Gere o primeiro documento a partir de uma nao conformidade ou de uma denuncia." />
+            )}
             {data.officialDocuments.map((document) => (
               <button
                 key={document.id}
@@ -3334,9 +3477,15 @@ function OfficialDocuments({
 
                 <div className="mt-5 grid gap-3 text-sm md:grid-cols-2">
                   <Info label="Area" value={maps.serviceAreas[selectedDocument.serviceAreaId ?? '']?.name} />
-                  <Info label="Local" value={maps.locations[selectedDocument.locationId ?? '']?.name} />
+                  <Info label="Local" value={maps.locations[selectedDocument.locationId ?? '']?.name ?? selectedDocument.externalAddress} />
                   <Info label="Data de emissao" value={formatDate(selectedDocument.createdAt)} />
                   <Info label="Coordenadas" value={formatCoordinates(selectedDocument.coordinates)} />
+                  {selectedDocument.nonConformityId && (
+                    <Info label="Nao conformidade" value={data.nonConformities.find((item) => item.id === selectedDocument.nonConformityId)?.number} />
+                  )}
+                  {selectedDocument.citizenReportId && (
+                    <Info label="Denuncia" value={data.citizenReports.find((item) => item.id === selectedDocument.citizenReportId)?.protocol} />
+                  )}
                 </div>
 
                 <div className="mt-5 space-y-4 text-sm leading-6 text-slate-700">

@@ -334,6 +334,8 @@ export interface OfficialDocument {
   nonConformityId?: string
   citizenReportId?: string
   locationId?: string
+  /** Endereco informado pelo cidadao quando nao ha local cadastrado vinculado. */
+  externalAddress?: string
   serviceAreaId?: string
   title: string
   facts: string
