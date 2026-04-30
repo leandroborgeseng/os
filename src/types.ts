@@ -22,6 +22,10 @@ export type NonConformityStatus = 'Aberta' | 'Em adequacao' | 'Corrigida' | 'Val
 
 export type CitizenReportStatus = 'Recebida' | 'Em triagem' | 'Encaminhada' | 'Vistoria agendada' | 'Concluida' | 'Arquivada'
 
+export type OfficialDocumentType = 'Auto de Infracao' | 'Notificacao' | 'Interdicao' | 'Apreensao' | 'Embargo' | 'Relatorio de Vistoria'
+
+export type OfficialDocumentStatus = 'Gerado' | 'Assinado' | 'Recusado' | 'Impresso' | 'Cancelado'
+
 export type QuestionResponseType =
   | 'conformidade'
   | 'sim_nao'
@@ -308,6 +312,42 @@ export interface CitizenReportGroup {
   status: CitizenReportStatus
 }
 
+export interface OfficialDocumentSignature {
+  id: string
+  signedAt: string
+  signerName: string
+  signerDocument?: string
+  signerRole: 'Fiscal' | 'Responsavel' | 'Testemunha'
+  method: 'Tela' | 'Recusa' | 'Sistema'
+  notes?: string
+}
+
+export interface OfficialDocument {
+  id: string
+  number: string
+  type: OfficialDocumentType
+  status: OfficialDocumentStatus
+  createdAt: string
+  updatedAt: string
+  createdBy: string
+  inspectionId?: string
+  nonConformityId?: string
+  citizenReportId?: string
+  locationId?: string
+  serviceAreaId?: string
+  title: string
+  facts: string
+  legalBasis: string
+  measures: string
+  defenseDeadlineDays?: number
+  regularizationDeadlineDays?: number
+  penalty?: string
+  coordinates?: Coordinates | null
+  signatures: OfficialDocumentSignature[]
+  printedAt?: string
+  qrCodePayload: string
+}
+
 export interface Notification {
   id: string
   userId?: string
@@ -358,6 +398,7 @@ export interface AppData {
   nonConformities: NonConformity[]
   citizenReports: CitizenReport[]
   citizenReportGroups: CitizenReportGroup[]
+  officialDocuments: OfficialDocument[]
   notifications: Notification[]
   auditLogs: AuditLog[]
   syncQueue: SyncQueueItem[]

@@ -56,6 +56,9 @@ import type {
   Location,
   NonConformity,
   NonConformityStatus,
+  OfficialDocument,
+  OfficialDocumentStatus,
+  OfficialDocumentType,
   Priority,
   QuestionResponseType,
   ScriptQuestion,
@@ -65,7 +68,7 @@ import type {
   UserRole,
 } from './types'
 
-type Page = 'dashboard' | 'cadastros' | 'roteiros' | 'denuncias' | 'vistorias' | 'planos' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
+type Page = 'dashboard' | 'cadastros' | 'roteiros' | 'denuncias' | 'vistorias' | 'planos' | 'documentos' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
 
 type AppMaps = {
   users: Record<string, AppData['users'][number]>
@@ -130,6 +133,14 @@ const citizenReportStatusColors: Record<CitizenReportStatus, string> = {
   Arquivada: 'bg-slate-200 text-slate-700',
 }
 
+const officialDocumentStatusColors: Record<OfficialDocumentStatus, string> = {
+  Gerado: 'bg-blue-100 text-blue-700',
+  Assinado: 'bg-emerald-100 text-emerald-700',
+  Recusado: 'bg-amber-100 text-amber-800',
+  Impresso: 'bg-sky-100 text-sky-800',
+  Cancelado: 'bg-slate-200 text-slate-700',
+}
+
 const pageConfig: Array<{ id: Page; label: string; icon: ReactNode; roles: UserRole[] }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'cadastros', label: 'Cadastros', icon: <Building2 size={18} />, roles: ['admin'] },
@@ -137,6 +148,7 @@ const pageConfig: Array<{ id: Page; label: string; icon: ReactNode; roles: UserR
   { id: 'denuncias', label: 'Denuncias', icon: <AlertTriangle size={18} />, roles: ['admin', 'gestor', 'consulta'] },
   { id: 'vistorias', label: 'Vistorias', icon: <ClipboardCheck size={18} />, roles: ['admin', 'gestor'] },
   { id: 'planos', label: 'Planos de acao', icon: <AlertTriangle size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
+  { id: 'documentos', label: 'Documentos', icon: <FileText size={18} />, roles: ['admin', 'gestor', 'consulta'] },
   { id: 'chamados', label: 'Chamados', icon: <TicketCheck size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'relatorios', label: 'Relatorios', icon: <FileText size={18} />, roles: ['admin', 'gestor', 'consulta'] },
   { id: 'impressao', label: 'Impressao', icon: <Printer size={18} />, roles: ['admin', 'gestor', 'executor'] },
@@ -708,6 +720,9 @@ function App() {
     }
     if (activePage === 'planos') {
       return <ActionPlans data={data} maps={maps} currentUser={currentUser} commit={commit} />
+    }
+    if (activePage === 'documentos') {
+      return <OfficialDocuments data={data} maps={maps} currentUser={currentUser} commit={commit} />
     }
     if (activePage === 'chamados') {
       return <Tickets data={data} maps={maps} currentUser={currentUser} commit={commit} query={query} setQuery={setQuery} />
@@ -2941,6 +2956,280 @@ function ActionPlans({
             </div>
           ) : (
             <EmptyState title="Nenhuma nao conformidade" text="Finalize uma vistoria com itens nao conformes para gerar planos de acao." />
+          )}
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function OfficialDocuments({
+  data,
+  maps,
+  currentUser,
+  commit,
+}: {
+  data: AppData
+  maps: AppMaps
+  currentUser: User
+  commit: (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => void
+}) {
+  const [selectedDocumentId, setSelectedDocumentId] = useState(data.officialDocuments[0]?.id ?? '')
+  const [sourceNonConformityId, setSourceNonConformityId] = useState(data.nonConformities[0]?.id ?? '')
+  const [documentType, setDocumentType] = useState<OfficialDocumentType>('Auto de Infracao')
+  const [signatureForm, setSignatureForm] = useState({ signerName: '', signerDocument: '', notes: '' })
+  const selectedDocument = data.officialDocuments.find((document) => document.id === selectedDocumentId) ?? data.officialDocuments[0]
+  const sourceNonConformity = data.nonConformities.find((item) => item.id === sourceNonConformityId)
+  const canIssue = ['admin', 'gestor'].includes(currentUser.role)
+
+  const createDocument = () => {
+    if (!sourceNonConformity) return
+
+    const now = new Date().toISOString()
+    const inspection = data.inspections.find((item) => item.id === sourceNonConformity.inspectionId)
+    const location = maps.locations[sourceNonConformity.locationId]
+    const number = nextProtocol('DOC', data.officialDocuments.map((item) => item.number))
+    const legalBasis = sourceNonConformity.legalReference || 'Legislacao municipal aplicavel e normas correlatas.'
+    const document: OfficialDocument = {
+      id: makeId('doc'),
+      number,
+      type: documentType,
+      status: 'Gerado',
+      createdAt: now,
+      updatedAt: now,
+      createdBy: currentUser.id,
+      inspectionId: sourceNonConformity.inspectionId,
+      nonConformityId: sourceNonConformity.id,
+      locationId: sourceNonConformity.locationId,
+      serviceAreaId: sourceNonConformity.serviceAreaId,
+      title: `${documentType} - ${sourceNonConformity.title}`,
+      facts: `Durante a vistoria ${inspection?.number ?? sourceNonConformity.inspectionId}, realizada em ${location?.name ?? 'local informado'}, foi constatada a seguinte irregularidade: ${sourceNonConformity.description}`,
+      legalBasis,
+      measures:
+        documentType === 'Auto de Infracao'
+          ? 'Lavrar auto de infracao, concedendo prazo legal para defesa e providencias cabiveis.'
+          : documentType === 'Interdicao'
+            ? 'Determinar interdicao cautelar ate saneamento do risco identificado e posterior validacao fiscal.'
+            : 'Notificar o responsavel para regularizacao dentro do prazo definido.',
+      defenseDeadlineDays: documentType === 'Auto de Infracao' ? 15 : undefined,
+      regularizationDeadlineDays: Math.max(1, Math.ceil((new Date(sourceNonConformity.dueDate).getTime() - Date.now()) / 86400000)),
+      penalty: documentType === 'Auto de Infracao' ? 'Advertencia, multa e demais penalidades previstas na legislacao aplicavel.' : undefined,
+      coordinates: inspection?.coordinates ?? undefined,
+      signatures: [
+        {
+          id: makeId('assinatura'),
+          signedAt: now,
+          signerName: currentUser.name,
+          signerRole: 'Fiscal',
+          method: 'Sistema',
+          notes: 'Documento emitido pelo fiscal responsavel no sistema.',
+        },
+      ],
+      qrCodePayload: `${window.location.origin}/?documento=${number}`,
+    }
+
+    commit(
+      (draft) => ({
+        ...draft,
+        officialDocuments: [document, ...draft.officialDocuments],
+        notifications: [
+          {
+            id: makeId('notif'),
+            title: 'Documento oficial gerado',
+            message: `${document.number} foi gerado para ${sourceNonConformity.number}.`,
+            createdAt: now,
+            read: false,
+          },
+          ...draft.notifications,
+        ],
+      }),
+      'Gerou documento oficial',
+      'documentos',
+      document.id,
+      `${document.number} gerado a partir de ${sourceNonConformity.number}.`,
+    )
+    setSelectedDocumentId(document.id)
+  }
+
+  const signDocument = (document: OfficialDocument, refused = false) => {
+    if (!signatureForm.signerName.trim() && !refused) return
+    const now = new Date().toISOString()
+
+    commit(
+      (draft) => ({
+        ...draft,
+        officialDocuments: draft.officialDocuments.map((item) =>
+          item.id === document.id
+            ? {
+                ...item,
+                status: refused ? 'Recusado' : 'Assinado',
+                updatedAt: now,
+                signatures: [
+                  {
+                    id: makeId('assinatura'),
+                    signedAt: now,
+                    signerName: refused ? signatureForm.signerName || 'Responsavel recusou assinatura' : signatureForm.signerName,
+                    signerDocument: signatureForm.signerDocument || undefined,
+                    signerRole: 'Responsavel',
+                    method: refused ? 'Recusa' : 'Tela',
+                    notes: signatureForm.notes || (refused ? 'Responsavel recusou ciencia/assinatura.' : 'Ciencia registrada em tela.'),
+                  },
+                  ...item.signatures,
+                ],
+              }
+            : item,
+        ),
+      }),
+      refused ? 'Registrou recusa de assinatura' : 'Registrou assinatura',
+      'documentos',
+      document.id,
+      `${document.number} atualizado com ${refused ? 'recusa' : 'assinatura'} do responsavel.`,
+    )
+    setSignatureForm({ signerName: '', signerDocument: '', notes: '' })
+  }
+
+  const markPrinted = (document: OfficialDocument) => {
+    const now = new Date().toISOString()
+    commit(
+      (draft) => ({
+        ...draft,
+        officialDocuments: draft.officialDocuments.map((item) => (item.id === document.id ? { ...item, status: 'Impresso', printedAt: now, updatedAt: now } : item)),
+      }),
+      'Registrou impressao de documento',
+      'documentos',
+      document.id,
+      `${document.number} marcado como impresso.`,
+    )
+    window.print()
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionTitle eyebrow="Fiscalizacao" title="Documentos oficiais" description="Gere autos, notificacoes, interdicoes e relatorios vinculados a vistorias e nao conformidades." />
+
+      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <Card>
+          <SectionTitle title="Emitir documento" description="Selecione uma nao conformidade e o tipo de documento oficial." />
+          <div className="mt-5 space-y-4">
+            <Field label="Nao conformidade">
+              <select className={inputClass} value={sourceNonConformityId} onChange={(event) => setSourceNonConformityId(event.target.value)}>
+                {data.nonConformities.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.number} - {item.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Tipo de documento">
+              <select className={inputClass} value={documentType} onChange={(event) => setDocumentType(event.target.value as OfficialDocumentType)}>
+                {(['Auto de Infracao', 'Notificacao', 'Interdicao', 'Apreensao', 'Embargo', 'Relatorio de Vistoria'] as OfficialDocumentType[]).map((type) => (
+                  <option key={type}>{type}</option>
+                ))}
+              </select>
+            </Field>
+            <button type="button" disabled={!canIssue || !sourceNonConformity} onClick={createDocument} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+              Gerar documento
+            </button>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            <p className="text-sm font-bold text-slate-900">Documentos recentes</p>
+            {data.officialDocuments.length === 0 && <EmptyState title="Nenhum documento emitido" text="Gere o primeiro documento a partir de uma nao conformidade." />}
+            {data.officialDocuments.map((document) => (
+              <button
+                key={document.id}
+                type="button"
+                onClick={() => setSelectedDocumentId(document.id)}
+                className={clsx('w-full rounded-2xl border p-4 text-left', selectedDocument?.id === document.id ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white')}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold">{document.number}</p>
+                    <p className="text-sm text-slate-600">{document.type}</p>
+                  </div>
+                  <Badge className={officialDocumentStatusColors[document.status]}>{document.status}</Badge>
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          {selectedDocument ? (
+            <div>
+              <div id="official-document-print" className="rounded-3xl border border-slate-200 bg-white p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">Prefeitura Municipal</p>
+                    <h3 className="mt-1 text-2xl font-black">{selectedDocument.type}</h3>
+                    <p className="text-sm font-semibold text-slate-500">{selectedDocument.number}</p>
+                  </div>
+                  <Badge className={officialDocumentStatusColors[selectedDocument.status]}>{selectedDocument.status}</Badge>
+                </div>
+
+                <div className="mt-5 grid gap-3 text-sm md:grid-cols-2">
+                  <Info label="Area" value={maps.serviceAreas[selectedDocument.serviceAreaId ?? '']?.name} />
+                  <Info label="Local" value={maps.locations[selectedDocument.locationId ?? '']?.name} />
+                  <Info label="Data de emissao" value={formatDate(selectedDocument.createdAt)} />
+                  <Info label="Coordenadas" value={formatCoordinates(selectedDocument.coordinates)} />
+                </div>
+
+                <div className="mt-5 space-y-4 text-sm leading-6 text-slate-700">
+                  <div>
+                    <p className="font-bold text-slate-950">Fatos constatados</p>
+                    <p>{selectedDocument.facts}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-950">Base legal</p>
+                    <p>{selectedDocument.legalBasis}</p>
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-950">Medidas adotadas</p>
+                    <p>{selectedDocument.measures}</p>
+                  </div>
+                  {selectedDocument.defenseDeadlineDays && <p><strong>Prazo de defesa:</strong> {selectedDocument.defenseDeadlineDays} dias.</p>}
+                  {selectedDocument.regularizationDeadlineDays && <p><strong>Prazo de regularizacao:</strong> {selectedDocument.regularizationDeadlineDays} dias.</p>}
+                  {selectedDocument.penalty && <p><strong>Penalidade prevista:</strong> {selectedDocument.penalty}</p>}
+                  <p className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold">QR/Protocolo: {selectedDocument.qrCodePayload}</p>
+                </div>
+
+                <div className="mt-6 border-t border-slate-200 pt-4">
+                  <p className="text-sm font-bold text-slate-900">Assinaturas e ciencia</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    {selectedDocument.signatures.map((signature) => (
+                      <div key={signature.id} className="rounded-2xl border border-slate-200 p-3 text-sm">
+                        <p className="font-bold">{signature.signerName}</p>
+                        <p className="text-slate-600">{signature.signerRole} • {signature.method}</p>
+                        <p className="text-xs text-slate-400">{formatDate(signature.signedAt)}</p>
+                        {signature.notes && <p className="mt-2 text-xs text-slate-600">{signature.notes}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <SectionTitle title="Registrar ciencia do responsavel" description="Use para assinatura em tela simplificada ou registro de recusa." />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Nome do responsavel">
+                    <input className={inputClass} value={signatureForm.signerName} onChange={(event) => setSignatureForm({ ...signatureForm, signerName: event.target.value })} />
+                  </Field>
+                  <Field label="CPF/CNPJ ou documento">
+                    <input className={inputClass} value={signatureForm.signerDocument} onChange={(event) => setSignatureForm({ ...signatureForm, signerDocument: event.target.value })} />
+                  </Field>
+                </div>
+                <Field label="Observacao">
+                  <textarea className={clsx(inputClass, 'min-h-20')} value={signatureForm.notes} onChange={(event) => setSignatureForm({ ...signatureForm, notes: event.target.value })} />
+                </Field>
+                <div className="flex flex-wrap gap-2">
+                  <ActionButton onClick={() => signDocument(selectedDocument)}>Registrar assinatura</ActionButton>
+                  <ActionButton onClick={() => signDocument(selectedDocument, true)}>Registrar recusa</ActionButton>
+                  <ActionButton onClick={() => markPrinted(selectedDocument)}>Imprimir</ActionButton>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyState title="Nenhum documento selecionado" text="Gere ou selecione um documento oficial para visualizar." />
           )}
         </Card>
       </div>

@@ -331,6 +331,7 @@ export const initialData: AppData = {
   nonConformities: [],
   citizenReports: [],
   citizenReportGroups: [],
+  officialDocuments: [],
   notifications: [
     {
       id: 'notif-1',
