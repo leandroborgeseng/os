@@ -18,6 +18,8 @@ export type TicketOrigin = 'Manual' | 'Vistoria'
 
 export type Criticality = 'Baixa' | 'Media' | 'Alta' | 'Critica'
 
+export type NonConformityStatus = 'Aberta' | 'Em adequacao' | 'Corrigida' | 'Validada' | 'Vencida' | 'Cancelada'
+
 export type QuestionResponseType =
   | 'conformidade'
   | 'sim_nao'
@@ -225,6 +227,41 @@ export interface Ticket {
   completionEvidence: Attachment[]
 }
 
+export interface NonConformityHistory {
+  id: string
+  at: string
+  userId: string
+  from?: NonConformityStatus
+  to: NonConformityStatus
+  note: string
+}
+
+export interface NonConformity {
+  id: string
+  number: string
+  inspectionId: string
+  checklistItemId: string
+  serviceAreaId?: string
+  inspectionTypeId?: string
+  scriptId?: string
+  locationId: string
+  sectorId: string
+  categoryId: string
+  title: string
+  description: string
+  criticality: Criticality
+  legalReference?: string
+  dueDate: string
+  status: NonConformityStatus
+  responsibleTeamId?: string
+  createdAt: string
+  updatedAt: string
+  createdBy: string
+  evidence: Attachment[]
+  validationNotes?: string
+  history: NonConformityHistory[]
+}
+
 export interface Notification {
   id: string
   userId?: string
@@ -272,6 +309,7 @@ export interface AppData {
   teams: Team[]
   inspections: Inspection[]
   tickets: Ticket[]
+  nonConformities: NonConformity[]
   notifications: Notification[]
   auditLogs: AuditLog[]
   syncQueue: SyncQueueItem[]

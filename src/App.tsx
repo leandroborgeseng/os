@@ -51,6 +51,8 @@ import type {
   InspectionAnswer,
   InspectionItemStatus,
   Location,
+  NonConformity,
+  NonConformityStatus,
   Priority,
   QuestionResponseType,
   ScriptQuestion,
@@ -60,7 +62,7 @@ import type {
   UserRole,
 } from './types'
 
-type Page = 'dashboard' | 'cadastros' | 'roteiros' | 'vistorias' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
+type Page = 'dashboard' | 'cadastros' | 'roteiros' | 'vistorias' | 'planos' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
 
 type AppMaps = {
   users: Record<string, AppData['users'][number]>
@@ -107,11 +109,21 @@ const statusColors: Record<TicketStatus, string> = {
   Cancelado: 'bg-slate-200 text-slate-700',
 }
 
+const nonConformityStatusColors: Record<NonConformityStatus, string> = {
+  Aberta: 'bg-rose-100 text-rose-700',
+  'Em adequacao': 'bg-amber-100 text-amber-800',
+  Corrigida: 'bg-sky-100 text-sky-800',
+  Validada: 'bg-emerald-100 text-emerald-700',
+  Vencida: 'bg-red-100 text-red-700',
+  Cancelada: 'bg-slate-200 text-slate-700',
+}
+
 const pageConfig: Array<{ id: Page; label: string; icon: ReactNode; roles: UserRole[] }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'cadastros', label: 'Cadastros', icon: <Building2 size={18} />, roles: ['admin'] },
   { id: 'roteiros', label: 'Roteiros', icon: <FileText size={18} />, roles: ['admin', 'gestor'] },
   { id: 'vistorias', label: 'Vistorias', icon: <ClipboardCheck size={18} />, roles: ['admin', 'gestor'] },
+  { id: 'planos', label: 'Planos de acao', icon: <AlertTriangle size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'chamados', label: 'Chamados', icon: <TicketCheck size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'relatorios', label: 'Relatorios', icon: <FileText size={18} />, roles: ['admin', 'gestor', 'consulta'] },
   { id: 'impressao', label: 'Impressao', icon: <Printer size={18} />, roles: ['admin', 'gestor', 'executor'] },
@@ -137,6 +149,10 @@ function isOverdue(ticket: Ticket) {
 function isNearDue(ticket: Ticket) {
   const diff = new Date(ticket.dueDate).getTime() - Date.now()
   return diff >= 0 && diff <= 3 * 86400000 && !['Concluido', 'Validado', 'Cancelado'].includes(ticket.status)
+}
+
+function isNonConformityOverdue(nonConformity: NonConformity) {
+  return !['Corrigida', 'Validada', 'Cancelada'].includes(nonConformity.status) && new Date(nonConformity.dueDate) < new Date()
 }
 
 function defaultDueDate() {
@@ -625,6 +641,9 @@ function App() {
     }
     if (activePage === 'vistorias') {
       return <Inspections data={data} maps={maps} currentUser={currentUser} commit={commit} />
+    }
+    if (activePage === 'planos') {
+      return <ActionPlans data={data} maps={maps} currentUser={currentUser} commit={commit} />
     }
     if (activePage === 'chamados') {
       return <Tickets data={data} maps={maps} currentUser={currentUser} commit={commit} query={query} setQuery={setQuery} />
@@ -1719,10 +1738,51 @@ function Inspections({
       answers,
     }
 
+    const nonConformingAnswers = status === 'Finalizada' ? answers.filter((answer) => answer.status === 'nao_conforme') : []
+    const generatedNonConformities: NonConformity[] = nonConformingAnswers.map((answer, index) => {
+      const inspectionItem = getInspectionItem(answer.checklistItemId)
+      const team = data.teams.find((item) => item.sectorId === form.sectorId) ?? data.teams[0]
+      const correctionDays = inspectionItem.defaultCorrectionDays ?? 5
+      const number = nextProtocol('NC', [...data.nonConformities.map((item) => item.number), ...Array.from({ length: index }, (_, offset) => `NC-${new Date().getFullYear()}-${String(data.nonConformities.length + offset + 1).padStart(4, '0')}`)])
+
+      return {
+        id: makeId('nc'),
+        number,
+        inspectionId: id,
+        checklistItemId: answer.checklistItemId,
+        serviceAreaId: form.serviceAreaId,
+        inspectionTypeId: form.inspectionTypeId,
+        scriptId: form.scriptId,
+        locationId: form.locationId,
+        sectorId: form.sectorId,
+        categoryId: form.categoryId,
+        title: inspectionItem.title,
+        description: answer.notes || 'Nao conformidade registrada sem observacoes adicionais.',
+        criticality: inspectionItem.criticality,
+        legalReference: inspectionItem.legalReference,
+        dueDate: new Date(Date.now() + correctionDays * 86400000).toISOString(),
+        status: 'Aberta',
+        responsibleTeamId: team?.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: currentUser.id,
+        evidence: [...answer.photos],
+        history: [
+          {
+            id: makeId('hist-nc'),
+            at: new Date().toISOString(),
+            userId: currentUser.id,
+            to: 'Aberta',
+            note: `Nao conformidade gerada automaticamente pela vistoria ${inspection.number}.`,
+          },
+        ],
+      }
+    })
+
     const generatedTickets: Ticket[] =
       status === 'Finalizada'
-        ? answers
-            .filter((answer) => answer.status === 'nao_conforme' && answer.openTicket && getInspectionItem(answer.checklistItemId).autoCreateTicket)
+        ? nonConformingAnswers
+            .filter((answer) => answer.openTicket && getInspectionItem(answer.checklistItemId).autoCreateTicket)
             .map((answer, index) => {
               const inspectionItem = getInspectionItem(answer.checklistItemId)
               const team = data.teams.find((item) => item.sectorId === form.sectorId) ?? data.teams[0]
@@ -1764,8 +1824,16 @@ function Inspections({
       (draft) => ({
         ...draft,
         inspections: [inspection, ...draft.inspections],
+        nonConformities: [...generatedNonConformities, ...draft.nonConformities],
         tickets: [...generatedTickets, ...draft.tickets],
         notifications: [
+          ...generatedNonConformities.map((nonConformity) => ({
+            id: makeId('notif'),
+            title: 'Nova nao conformidade',
+            message: `${nonConformity.number} foi registrada com prazo para ${dateOnly(nonConformity.dueDate)}.`,
+            createdAt: new Date().toISOString(),
+            read: false,
+          })),
           ...generatedTickets.map((ticket) => ({
             id: makeId('notif'),
             title: 'Novo chamado atribuido',
@@ -1779,7 +1847,7 @@ function Inspections({
       status === 'Finalizada' ? 'Finalizou vistoria' : 'Salvou rascunho',
       'vistorias',
       id,
-      `${inspection.number} salva com ${generatedTickets.length} chamado(s) gerado(s).`,
+      `${inspection.number} salva com ${generatedNonConformities.length} nao conformidade(s) e ${generatedTickets.length} chamado(s) gerado(s).`,
     )
     setForm({
       serviceAreaId: defaultScript?.serviceAreaId ?? data.serviceAreas[0]?.id ?? '',
@@ -2034,6 +2102,256 @@ function Inspections({
               </div>
             ))}
           </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function ActionPlans({
+  data,
+  maps,
+  currentUser,
+  commit,
+}: {
+  data: AppData
+  maps: AppMaps
+  currentUser: User
+  commit: (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => void
+}) {
+  const [statusFilter, setStatusFilter] = useState('Todos')
+  const [criticalityFilter, setCriticalityFilter] = useState('Todas')
+  const [selectedId, setSelectedId] = useState(data.nonConformities[0]?.id ?? '')
+  const [note, setNote] = useState('')
+  const filtered = data.nonConformities
+    .map((item) => (isNonConformityOverdue(item) && item.status !== 'Vencida' ? { ...item, status: 'Vencida' as NonConformityStatus } : item))
+    .filter((item) => {
+      const matchesStatus = statusFilter === 'Todos' || item.status === statusFilter
+      const matchesCriticality = criticalityFilter === 'Todas' || item.criticality === criticalityFilter
+      return matchesStatus && matchesCriticality
+    })
+  const selected = data.nonConformities.find((item) => item.id === selectedId) ?? filtered[0]
+  const canCorrect = ['admin', 'executor'].includes(currentUser.role)
+  const canValidate = ['admin', 'gestor'].includes(currentUser.role)
+
+  const changeStatus = (nonConformity: NonConformity, to: NonConformityStatus, statusNote: string) => {
+    commit(
+      (draft) => ({
+        ...draft,
+        nonConformities: draft.nonConformities.map((item) =>
+          item.id === nonConformity.id
+            ? {
+                ...item,
+                status: to,
+                updatedAt: new Date().toISOString(),
+                validationNotes: to === 'Validada' ? statusNote : item.validationNotes,
+                history: [
+                  {
+                    id: makeId('hist-nc'),
+                    at: new Date().toISOString(),
+                    userId: currentUser.id,
+                    from: item.status,
+                    to,
+                    note: statusNote,
+                  },
+                  ...item.history,
+                ],
+              }
+            : item,
+        ),
+      }),
+      'Atualizou plano de acao',
+      'nao_conformidades',
+      nonConformity.id,
+      `${nonConformity.number} atualizado para ${to}.`,
+    )
+    setNote('')
+  }
+
+  const addEvidence = async (nonConformity: NonConformity, event: ChangeEvent<HTMLInputElement>) => {
+    const files = await filesToAttachments(event.target.files)
+    if (files.length === 0) return
+
+    commit(
+      (draft) => ({
+        ...draft,
+        nonConformities: draft.nonConformities.map((item) =>
+          item.id === nonConformity.id
+            ? {
+                ...item,
+                status: item.status === 'Aberta' ? 'Em adequacao' : item.status,
+                updatedAt: new Date().toISOString(),
+                evidence: [...item.evidence, ...files],
+                history: [
+                  {
+                    id: makeId('hist-nc'),
+                    at: new Date().toISOString(),
+                    userId: currentUser.id,
+                    from: item.status,
+                    to: item.status === 'Aberta' ? 'Em adequacao' : item.status,
+                    note: `${files.length} evidencia(s) adicionada(s).`,
+                  },
+                  ...item.history,
+                ],
+              }
+            : item,
+        ),
+      }),
+      'Adicionou evidencia',
+      'nao_conformidades',
+      nonConformity.id,
+      `${files.length} evidencia(s) adicionada(s) em ${nonConformity.number}.`,
+    )
+    event.target.value = ''
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionTitle eyebrow="Fiscalizacao" title="Planos de acao e nao conformidades" description="Acompanhe adequacoes, prazos, evidencias e validacao fiscal das nao conformidades." />
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard icon={<AlertTriangle />} label="Nao conformidades" value={data.nonConformities.length} tone="rose" />
+        <MetricCard icon={<CalendarClock />} label="Vencidas" value={data.nonConformities.filter(isNonConformityOverdue).length} tone="amber" />
+        <MetricCard icon={<Camera />} label="Com evidencias" value={data.nonConformities.filter((item) => item.evidence.length > 0).length} tone="blue" />
+        <MetricCard icon={<CheckCircle2 />} label="Validadas" value={data.nonConformities.filter((item) => item.status === 'Validada').length} tone="emerald" />
+      </div>
+
+      <Card>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Field label="Status">
+            <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {['Todos', 'Aberta', 'Em adequacao', 'Corrigida', 'Validada', 'Vencida', 'Cancelada'].map((status) => (
+                <option key={status}>{status}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Criticidade">
+            <select className={inputClass} value={criticalityFilter} onChange={(event) => setCriticalityFilter(event.target.value)}>
+              {['Todas', 'Baixa', 'Media', 'Alta', 'Critica'].map((criticality) => (
+                <option key={criticality}>{criticality}</option>
+              ))}
+            </select>
+          </Field>
+          <div className="flex items-end">
+            <button type="button" className="w-full rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold" onClick={() => { setStatusFilter('Todos'); setCriticalityFilter('Todas') }}>
+              Limpar filtros
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+        <Card>
+          <SectionTitle title="Nao conformidades registradas" description={`${filtered.length} registro(s) exibido(s) de ${data.nonConformities.length}.`} />
+          <div className="mt-5 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead>
+                <tr className="text-xs uppercase tracking-[0.14em] text-slate-400">
+                  <th className="p-3">Numero</th>
+                  <th className="p-3">Local</th>
+                  <th className="p-3">Criticidade</th>
+                  <th className="p-3">Status</th>
+                  <th className="p-3">Prazo</th>
+                  <th className="p-3">Acao</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((nonConformity) => (
+                  <tr key={nonConformity.id} className={clsx(isNonConformityOverdue(nonConformity) && 'bg-rose-50')}>
+                    <td className="p-3 font-bold">{nonConformity.number}</td>
+                    <td className="p-3">
+                      <p className="font-semibold">{maps.locations[nonConformity.locationId]?.name}</p>
+                      <p className="text-xs text-slate-500">{nonConformity.title}</p>
+                    </td>
+                    <td className="p-3"><Badge className={criticalityColors[nonConformity.criticality]}>{nonConformity.criticality}</Badge></td>
+                    <td className="p-3"><Badge className={nonConformityStatusColors[isNonConformityOverdue(nonConformity) ? 'Vencida' : nonConformity.status]}>{isNonConformityOverdue(nonConformity) ? 'Vencida' : nonConformity.status}</Badge></td>
+                    <td className="p-3">{dateOnly(nonConformity.dueDate)}</td>
+                    <td className="p-3">
+                      <button type="button" className="rounded-xl border border-slate-200 px-3 py-2 font-semibold" onClick={() => setSelectedId(nonConformity.id)}>
+                        Abrir
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filtered.length === 0 && <EmptyState title="Nenhum registro encontrado" text="Nao ha nao conformidades para os filtros aplicados." />}
+          </div>
+        </Card>
+
+        <Card>
+          {selected ? (
+            <div>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.15em] text-slate-400">{maps.serviceAreas[selected.serviceAreaId ?? '']?.name ?? 'Area nao informada'}</p>
+                  <h3 className="text-2xl font-black">{selected.number}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{maps.locations[selected.locationId]?.name}</p>
+                </div>
+                <Badge className={nonConformityStatusColors[isNonConformityOverdue(selected) ? 'Vencida' : selected.status]}>{isNonConformityOverdue(selected) ? 'Vencida' : selected.status}</Badge>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <Badge className={criticalityColors[selected.criticality]}>{selected.criticality}</Badge>
+                <p className="mt-3 font-bold text-slate-900">{selected.title}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{selected.description}</p>
+                {selected.legalReference && <p className="mt-3 text-xs font-semibold text-slate-500">Base legal: {selected.legalReference}</p>}
+              </div>
+
+              <div className="mt-5 grid gap-3 text-sm md:grid-cols-2">
+                <Info label="Prazo" value={dateOnly(selected.dueDate)} />
+                <Info label="Equipe responsavel" value={maps.teams[selected.responsibleTeamId ?? '']?.name} />
+                <Info label="Setor" value={maps.sectors[selected.sectorId]?.name} />
+                <Info label="Vistoria" value={data.inspections.find((inspection) => inspection.id === selected.inspectionId)?.number} />
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <Field label="Observacao da movimentacao">
+                  <textarea className={clsx(inputClass, 'min-h-24')} value={note} onChange={(event) => setNote(event.target.value)} placeholder="Descreva a correcao, validacao ou motivo da movimentacao." />
+                </Field>
+                <div className="flex flex-wrap gap-2">
+                  {canCorrect && (
+                    <>
+                      <ActionButton onClick={() => changeStatus(selected, 'Em adequacao', note || 'Adequacao iniciada.')}>Iniciar adequacao</ActionButton>
+                      <ActionButton onClick={() => changeStatus(selected, 'Corrigida', note || 'Correcao informada para validacao.')}>Marcar corrigida</ActionButton>
+                    </>
+                  )}
+                  {canValidate && <ActionButton onClick={() => changeStatus(selected, 'Validada', note || 'Nao conformidade validada pelo fiscal.')}>Validar</ActionButton>}
+                  {canValidate && <ActionButton onClick={() => changeStatus(selected, 'Cancelada', note || 'Nao conformidade cancelada.')}>Cancelar</ActionButton>}
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
+                  <Paperclip size={16} />
+                  Anexar evidencia
+                  <input className="hidden" type="file" multiple accept="image/*,.pdf" onChange={(event) => addEvidence(selected, event)} />
+                </label>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {selected.evidence.map((file) => (
+                    <div key={file.id} className="w-28 rounded-2xl border border-slate-200 bg-white p-2">
+                      {file.dataUrl.startsWith('data:image') ? <img src={file.dataUrl} alt={file.name} className="h-20 w-full rounded-xl object-cover" /> : <Paperclip className="mx-auto mt-5 text-slate-400" />}
+                      <p className="mt-2 truncate text-[10px] font-semibold text-slate-500">{file.name}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <p className="text-sm font-bold text-slate-900">Historico</p>
+                <div className="mt-3 space-y-3">
+                  {selected.history.map((entry) => (
+                    <div key={entry.id} className="rounded-2xl border border-slate-200 p-3 text-sm">
+                      <p className="font-semibold">{entry.from ? `${entry.from} -> ${entry.to}` : entry.to}</p>
+                      <p className="text-slate-600">{entry.note}</p>
+                      <p className="mt-1 text-xs text-slate-400">{formatDate(entry.at)} • {maps.users[entry.userId]?.name}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyState title="Nenhuma nao conformidade" text="Finalize uma vistoria com itens nao conformes para gerar planos de acao." />
+          )}
         </Card>
       </div>
     </div>
