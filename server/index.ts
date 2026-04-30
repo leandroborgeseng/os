@@ -6,8 +6,39 @@ import { Prisma, PrismaClient } from '@prisma/client'
 import { initialData } from '../src/mockData.js'
 import type { AppData } from '../src/types.js'
 
+function buildDatabaseUrlFromPgVariables() {
+  const host = process.env.PGHOST
+  const port = process.env.PGPORT ?? '5432'
+  const user = process.env.PGUSER
+  const password = process.env.PGPASSWORD
+  const database = process.env.PGDATABASE
+
+  if (!host || !user || !password || !database) {
+    return undefined
+  }
+
+  return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${database}?schema=public`
+}
+
+function resolveDatabaseUrl() {
+  const railwayFallback = process.env.RAILWAY_ENVIRONMENT ? undefined : 'postgresql://localhost:5432/os?schema=public'
+
+  return (
+    process.env.DATABASE_URL ??
+    process.env.DATABASE_PRIVATE_URL ??
+    process.env.POSTGRES_URL ??
+    buildDatabaseUrlFromPgVariables() ??
+    railwayFallback
+  )
+}
+
 const app = express()
-const connectionString = process.env.DATABASE_URL ?? 'postgresql://localhost:5432/os?schema=public'
+const connectionString = resolveDatabaseUrl()
+
+if (!connectionString) {
+  throw new Error('Configure a variavel DATABASE_URL com a URL do PostgreSQL antes de iniciar a aplicacao.')
+}
+
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 })
