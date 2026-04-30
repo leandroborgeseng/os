@@ -1,0 +1,171 @@
+import type { AppData, Ticket } from './types.js'
+
+const now = new Date()
+const daysFromNow = (days: number) => new Date(now.getTime() + days * 86400000).toISOString()
+const daysAgo = (days: number) => new Date(now.getTime() - days * 86400000).toISOString()
+
+const baseTickets: Ticket[] = [
+  {
+    id: 'ticket-1',
+    number: 'CH-2026-0001',
+    origin: 'Manual',
+    locationId: 'loc-1',
+    sectorId: 'set-1',
+    categoryId: 'cat-1',
+    description: 'Brinquedo do playground com parafuso exposto e risco aos usuarios.',
+    priority: 'Alta',
+    teamId: 'team-1',
+    dueDate: daysFromNow(2),
+    status: 'Em execucao',
+    createdAt: daysAgo(4),
+    updatedAt: daysAgo(1),
+    history: [
+      {
+        id: 'hist-1',
+        at: daysAgo(4),
+        userId: 'user-2',
+        to: 'Aberto',
+        note: 'Chamado aberto manualmente pela fiscalizacao.',
+      },
+      {
+        id: 'hist-2',
+        at: daysAgo(2),
+        userId: 'user-3',
+        from: 'Aberto',
+        to: 'Em execucao',
+        note: 'Equipe iniciou reparo preventivo.',
+      },
+    ],
+    comments: [],
+    attachments: [],
+    completionEvidence: [],
+  },
+  {
+    id: 'ticket-2',
+    number: 'CH-2026-0002',
+    origin: 'Manual',
+    locationId: 'loc-2',
+    sectorId: 'set-2',
+    categoryId: 'cat-2',
+    description: 'Lampadas queimadas no corredor de atendimento principal.',
+    priority: 'Media',
+    teamId: 'team-2',
+    dueDate: daysAgo(1),
+    status: 'Aberto',
+    createdAt: daysAgo(7),
+    updatedAt: daysAgo(7),
+    history: [
+      {
+        id: 'hist-3',
+        at: daysAgo(7),
+        userId: 'user-2',
+        to: 'Aberto',
+        note: 'Chamado aberto para manutencao eletrica.',
+      },
+    ],
+    comments: [],
+    attachments: [],
+    completionEvidence: [],
+  },
+  {
+    id: 'ticket-3',
+    number: 'CH-2026-0003',
+    origin: 'Manual',
+    locationId: 'loc-3',
+    sectorId: 'set-1',
+    categoryId: 'cat-3',
+    description: 'Bebedouro com vazamento continuo proximo ao refeitorio.',
+    priority: 'Baixa',
+    teamId: 'team-1',
+    dueDate: daysFromNow(8),
+    status: 'Validado',
+    createdAt: daysAgo(12),
+    updatedAt: daysAgo(3),
+    completedAt: daysAgo(4),
+    validatedAt: daysAgo(3),
+    history: [
+      {
+        id: 'hist-4',
+        at: daysAgo(12),
+        userId: 'user-2',
+        to: 'Aberto',
+        note: 'Chamado registrado apos vistoria de rotina.',
+      },
+      {
+        id: 'hist-5',
+        at: daysAgo(4),
+        userId: 'user-3',
+        from: 'Em execucao',
+        to: 'Concluido',
+        note: 'Troca de conexao realizada.',
+      },
+      {
+        id: 'hist-6',
+        at: daysAgo(3),
+        userId: 'user-2',
+        from: 'Concluido',
+        to: 'Validado',
+        note: 'Servico validado em campo.',
+      },
+    ],
+    comments: [],
+    attachments: [],
+    completionEvidence: [],
+  },
+]
+
+export const initialData: AppData = {
+  users: [
+    { id: 'user-1', name: 'Marina Costa', email: 'admin@prefeitura.local', role: 'admin' },
+    { id: 'user-2', name: 'Carlos Lima', email: 'fiscal@prefeitura.local', role: 'gestor' },
+    { id: 'user-3', name: 'Equipe Manutencao', email: 'execucao@prefeitura.local', role: 'executor', teamId: 'team-1' },
+    { id: 'user-4', name: 'Consulta Geral', email: 'consulta@prefeitura.local', role: 'consulta' },
+  ],
+  departments: [
+    { id: 'dep-1', name: 'Secretaria de Obras e Servicos Urbanos' },
+    { id: 'dep-2', name: 'Secretaria de Educacao' },
+  ],
+  sectors: [
+    { id: 'set-1', name: 'Manutencao de Pracas e Predios Publicos', departmentId: 'dep-1' },
+    { id: 'set-2', name: 'Unidades Escolares', departmentId: 'dep-2' },
+  ],
+  locationTypes: [
+    { id: 'type-1', name: 'Praca' },
+    { id: 'type-2', name: 'Predio administrativo' },
+    { id: 'type-3', name: 'Escola' },
+  ],
+  locations: [
+    { id: 'loc-1', name: 'Praca Central', address: 'Av. Brasil, Centro', sectorId: 'set-1', typeId: 'type-1', active: true },
+    { id: 'loc-2', name: 'Paco Municipal', address: 'Rua da Prefeitura, 100', sectorId: 'set-2', typeId: 'type-2', active: true },
+    { id: 'loc-3', name: 'EMEF Jardim das Flores', address: 'Rua das Acacias, 45', sectorId: 'set-2', typeId: 'type-3', active: true },
+  ],
+  categories: [
+    { id: 'cat-1', name: 'Seguranca' },
+    { id: 'cat-2', name: 'Eletrica' },
+    { id: 'cat-3', name: 'Hidraulica' },
+    { id: 'cat-4', name: 'Limpeza e conservacao' },
+  ],
+  checklistItems: [
+    { id: 'chk-1', title: 'Estruturas sem risco aparente aos usuarios', categoryId: 'cat-1', required: true, active: true },
+    { id: 'chk-2', title: 'Iluminacao funcionando adequadamente', categoryId: 'cat-2', required: true, active: true },
+    { id: 'chk-3', title: 'Pontos de agua sem vazamentos', categoryId: 'cat-3', required: true, active: true },
+    { id: 'chk-4', title: 'Ambiente limpo e sem descarte irregular', categoryId: 'cat-4', required: false, active: true },
+  ],
+  teams: [
+    { id: 'team-1', name: 'Equipe de Manutencao Predial', sectorId: 'set-1', lead: 'Joao Pereira' },
+    { id: 'team-2', name: 'Equipe Eletrica', sectorId: 'set-2', lead: 'Ana Martins' },
+  ],
+  inspections: [],
+  tickets: baseTickets,
+  notifications: [
+    {
+      id: 'notif-1',
+      title: 'Chamado vencido',
+      message: 'CH-2026-0002 ultrapassou o prazo de atendimento.',
+      createdAt: daysAgo(1),
+      read: false,
+    },
+  ],
+  auditLogs: [],
+  syncQueue: [],
+}
