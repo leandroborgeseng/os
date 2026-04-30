@@ -20,6 +20,8 @@ export type Criticality = 'Baixa' | 'Media' | 'Alta' | 'Critica'
 
 export type NonConformityStatus = 'Aberta' | 'Em adequacao' | 'Corrigida' | 'Validada' | 'Vencida' | 'Cancelada'
 
+export type CitizenReportStatus = 'Recebida' | 'Em triagem' | 'Encaminhada' | 'Vistoria agendada' | 'Concluida' | 'Arquivada'
+
 export type QuestionResponseType =
   | 'conformidade'
   | 'sim_nao'
@@ -262,6 +264,35 @@ export interface NonConformity {
   history: NonConformityHistory[]
 }
 
+export interface CitizenReport {
+  id: string
+  protocol: string
+  createdAt: string
+  updatedAt: string
+  status: CitizenReportStatus
+  categoryId: string
+  serviceAreaId?: string
+  title: string
+  description: string
+  address: string
+  coordinates?: Coordinates | null
+  anonymous: boolean
+  citizenName?: string
+  citizenContact?: string
+  attachments: Attachment[]
+  triageNotes?: string
+  assignedSectorId?: string
+  linkedInspectionId?: string
+  linkedTicketId?: string
+  history: Array<{
+    id: string
+    at: string
+    status: CitizenReportStatus
+    note: string
+    userId?: string
+  }>
+}
+
 export interface Notification {
   id: string
   userId?: string
@@ -310,6 +341,7 @@ export interface AppData {
   inspections: Inspection[]
   tickets: Ticket[]
   nonConformities: NonConformity[]
+  citizenReports: CitizenReport[]
   notifications: Notification[]
   auditLogs: AuditLog[]
   syncQueue: SyncQueueItem[]

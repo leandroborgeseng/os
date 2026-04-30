@@ -44,6 +44,8 @@ import type {
   AppData,
   Attachment,
   AuditLog,
+  CitizenReport,
+  CitizenReportStatus,
   ChecklistItem,
   Coordinates,
   Criticality,
@@ -62,7 +64,7 @@ import type {
   UserRole,
 } from './types'
 
-type Page = 'dashboard' | 'cadastros' | 'roteiros' | 'vistorias' | 'planos' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
+type Page = 'dashboard' | 'cadastros' | 'roteiros' | 'denuncias' | 'vistorias' | 'planos' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
 
 type AppMaps = {
   users: Record<string, AppData['users'][number]>
@@ -118,10 +120,20 @@ const nonConformityStatusColors: Record<NonConformityStatus, string> = {
   Cancelada: 'bg-slate-200 text-slate-700',
 }
 
+const citizenReportStatusColors: Record<CitizenReportStatus, string> = {
+  Recebida: 'bg-blue-100 text-blue-700',
+  'Em triagem': 'bg-amber-100 text-amber-800',
+  Encaminhada: 'bg-indigo-100 text-indigo-700',
+  'Vistoria agendada': 'bg-sky-100 text-sky-800',
+  Concluida: 'bg-emerald-100 text-emerald-700',
+  Arquivada: 'bg-slate-200 text-slate-700',
+}
+
 const pageConfig: Array<{ id: Page; label: string; icon: ReactNode; roles: UserRole[] }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'cadastros', label: 'Cadastros', icon: <Building2 size={18} />, roles: ['admin'] },
   { id: 'roteiros', label: 'Roteiros', icon: <FileText size={18} />, roles: ['admin', 'gestor'] },
+  { id: 'denuncias', label: 'Denuncias', icon: <AlertTriangle size={18} />, roles: ['admin', 'gestor', 'consulta'] },
   { id: 'vistorias', label: 'Vistorias', icon: <ClipboardCheck size={18} />, roles: ['admin', 'gestor'] },
   { id: 'planos', label: 'Planos de acao', icon: <AlertTriangle size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'chamados', label: 'Chamados', icon: <TicketCheck size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
@@ -579,6 +591,10 @@ function App() {
 
   const permittedPages = currentUser ? pageConfig.filter((page) => page.roles.includes(currentUser.role)) : []
 
+  const commitPublic = (producer: (draft: AppData) => AppData) => {
+    setData(producer)
+  }
+
   const commit = (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => {
     if (!currentUser) return
     setData((previous) => addAuditAndSyncQueue(producer(previous), currentUser, action, entity, entityId, description))
@@ -625,6 +641,12 @@ function App() {
     setInstallPrompt(null)
   }
 
+  const portal = new URLSearchParams(window.location.search).get('portal')
+
+  if (portal === 'cidadao') {
+    return <CitizenPortal data={data} commitPublic={commitPublic} />
+  }
+
   if (!currentUser) {
     return <LoginPage data={data} onLogin={setCurrentUser} />
   }
@@ -638,6 +660,9 @@ function App() {
     }
     if (activePage === 'roteiros') {
       return <InspectionScriptsAdmin data={data} maps={maps} currentUser={currentUser} commit={commit} />
+    }
+    if (activePage === 'denuncias') {
+      return <CitizenReportsAdmin data={data} maps={maps} currentUser={currentUser} commit={commit} />
     }
     if (activePage === 'vistorias') {
       return <Inspections data={data} maps={maps} currentUser={currentUser} commit={commit} />
@@ -848,9 +873,219 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
             >
               Acessar plataforma
             </button>
+            <a
+              href="/?portal=cidadao"
+              className="block w-full rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-center text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+            >
+              Registrar denuncia como cidadao
+            </a>
           </div>
         </Card>
       </section>
+    </main>
+  )
+}
+
+function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (producer: (draft: AppData) => AppData) => void }) {
+  const [form, setForm] = useState({
+    categoryId: data.categories[0]?.id ?? '',
+    serviceAreaId: data.serviceAreas[0]?.id ?? '',
+    title: '',
+    description: '',
+    address: '',
+    anonymous: true,
+    citizenName: '',
+    citizenContact: '',
+    coordinates: null as Coordinates | null,
+    attachments: [] as Attachment[],
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  const captureLocation = async () => {
+    try {
+      const coordinates = await getCurrentCoordinates()
+      setForm((previous) => ({ ...previous, coordinates }))
+      setMessage({ type: 'success', text: 'Localizacao capturada com sucesso.' })
+    } catch {
+      setMessage({ type: 'error', text: 'Nao foi possivel capturar sua localizacao. Confira a permissao de GPS do navegador.' })
+    }
+  }
+
+  const addCitizenPhotos = async (event: ChangeEvent<HTMLInputElement>) => {
+    const files = await filesToAttachments(event.target.files, form.coordinates)
+    setForm((previous) => ({ ...previous, attachments: [...previous.attachments, ...files] }))
+    event.target.value = ''
+  }
+
+  const submitReport = () => {
+    if (!form.title.trim() || !form.description.trim()) {
+      setMessage({ type: 'error', text: 'Informe o assunto e a descricao da denuncia antes de enviar.' })
+      return
+    }
+
+    setIsSubmitting(true)
+    const protocol = nextProtocol('DEN', data.citizenReports.map((item) => item.protocol))
+    const now = new Date().toISOString()
+    const report: CitizenReport = {
+      id: makeId('denuncia'),
+      protocol,
+      createdAt: now,
+      updatedAt: now,
+      status: 'Recebida',
+      categoryId: form.categoryId,
+      serviceAreaId: form.serviceAreaId,
+      title: form.title,
+      description: form.description,
+      address: form.address,
+      coordinates: form.coordinates,
+      anonymous: form.anonymous,
+      citizenName: form.anonymous ? undefined : form.citizenName,
+      citizenContact: form.anonymous ? undefined : form.citizenContact,
+      attachments: form.attachments,
+      history: [
+        {
+          id: makeId('hist-den'),
+          at: now,
+          status: 'Recebida',
+          note: 'Denuncia registrada pelo portal do cidadao.',
+        },
+      ],
+    }
+
+    commitPublic((draft) => ({
+      ...draft,
+      citizenReports: [report, ...draft.citizenReports],
+      notifications: [
+        {
+          id: makeId('notif'),
+          title: 'Nova denuncia cidada',
+          message: `${protocol} foi registrada pelo portal do cidadao.`,
+          createdAt: now,
+          read: false,
+        },
+        ...draft.notifications,
+      ],
+    }))
+    setIsSubmitting(false)
+    setMessage({ type: 'success', text: `Denuncia enviada com sucesso. Protocolo: ${protocol}` })
+    setForm({
+      categoryId: data.categories[0]?.id ?? '',
+      serviceAreaId: data.serviceAreas[0]?.id ?? '',
+      title: '',
+      description: '',
+      address: '',
+      anonymous: true,
+      citizenName: '',
+      citizenContact: '',
+      coordinates: null,
+      attachments: [],
+    })
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-100 px-4 py-5 text-slate-900">
+      <div className="mx-auto max-w-3xl space-y-5">
+        <header className="rounded-[2rem] bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/15">
+          <div className="flex items-center gap-3">
+            <div className="grid size-12 place-items-center rounded-2xl bg-blue-600">
+              <ShieldCheck size={26} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-200">Portal do cidadao</p>
+              <h1 className="text-xl font-black">Registrar denuncia</h1>
+            </div>
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-300">Envie informacoes, fotos e localizacao para a prefeitura analisar a ocorrencia. O atendimento sera acompanhado por protocolo.</p>
+        </header>
+
+        {message && (
+          <div className={clsx('rounded-2xl border p-4 text-sm font-semibold', message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700')}>
+            {message.text}
+          </div>
+        )}
+
+        <Card>
+          <div className="space-y-4">
+            <Field label="Area responsavel">
+              <select className={inputClass} value={form.serviceAreaId} onChange={(event) => setForm({ ...form, serviceAreaId: event.target.value })}>
+                {data.serviceAreas.filter((area) => area.active).map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Categoria">
+              <select className={inputClass} value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })}>
+                {data.categories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Assunto">
+              <input className={inputClass} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="Ex.: Terreno com lixo e agua parada" />
+            </Field>
+            <Field label="Descricao">
+              <textarea className={clsx(inputClass, 'min-h-32')} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="Descreva o problema com o maximo de detalhes." />
+            </Field>
+            <Field label="Endereco ou referencia">
+              <input className={inputClass} value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Rua, numero, bairro ou ponto de referencia" />
+            </Field>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-bold">Geolocalizacao</p>
+              <p className="mt-1 text-xs text-slate-500">No celular, permita o acesso ao GPS para enviar a localizacao aproximada da ocorrencia.</p>
+              <div className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-slate-600">{formatCoordinates(form.coordinates)}</div>
+              <button type="button" className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white" onClick={captureLocation}>
+                <MapPin size={16} />
+                Usar localizacao atual
+              </button>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-bold">Fotos ou anexos</p>
+              <p className="mt-1 text-xs text-slate-500">Envie fotos do problema. Elas ajudam a triagem da secretaria responsavel.</p>
+              <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
+                <Camera size={16} />
+                Adicionar foto
+                <input className="hidden" type="file" multiple accept="image/*" capture="environment" onChange={addCitizenPhotos} />
+              </label>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {form.attachments.map((attachment) => (
+                  <div key={attachment.id} className="w-24 rounded-2xl border border-slate-200 bg-white p-2">
+                    <img src={attachment.dataUrl} alt={attachment.name} className="h-16 w-full rounded-xl object-cover" />
+                    <p className="mt-1 truncate text-[10px] text-slate-500">{attachment.name}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <label className="flex items-center gap-3 rounded-2xl border border-slate-200 p-4 text-sm font-semibold">
+              <input type="checkbox" checked={form.anonymous} onChange={(event) => setForm({ ...form, anonymous: event.target.checked })} />
+              Enviar como denuncia anonima
+            </label>
+
+            {!form.anonymous && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Nome">
+                  <input className={inputClass} value={form.citizenName} onChange={(event) => setForm({ ...form, citizenName: event.target.value })} />
+                </Field>
+                <Field label="Contato">
+                  <input className={inputClass} value={form.citizenContact} onChange={(event) => setForm({ ...form, citizenContact: event.target.value })} placeholder="Telefone ou e-mail" />
+                </Field>
+              </div>
+            )}
+
+            <button type="button" disabled={isSubmitting} onClick={submitReport} className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold text-white shadow-lg shadow-blue-600/20 disabled:opacity-50">
+              Enviar denuncia
+            </button>
+            <a href="/" className="block text-center text-sm font-bold text-blue-700">Acessar area administrativa</a>
+          </div>
+        </Card>
+      </div>
     </main>
   )
 }
@@ -1638,6 +1873,247 @@ function InspectionScriptsAdmin({
                 ))}
               </div>
             </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+function CitizenReportsAdmin({
+  data,
+  maps,
+  currentUser,
+  commit,
+}: {
+  data: AppData
+  maps: AppMaps
+  currentUser: User
+  commit: (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => void
+}) {
+  const [statusFilter, setStatusFilter] = useState('Todos')
+  const [selectedId, setSelectedId] = useState(data.citizenReports[0]?.id ?? '')
+  const [triageNote, setTriageNote] = useState('')
+  const [assignedSectorId, setAssignedSectorId] = useState(data.sectors[0]?.id ?? '')
+  const filtered = data.citizenReports.filter((report) => statusFilter === 'Todos' || report.status === statusFilter)
+  const selected = data.citizenReports.find((report) => report.id === selectedId) ?? filtered[0]
+  const canTriage = ['admin', 'gestor'].includes(currentUser.role)
+
+  const updateReportStatus = (report: CitizenReport, status: CitizenReportStatus, note: string) => {
+    commit(
+      (draft) => ({
+        ...draft,
+        citizenReports: draft.citizenReports.map((item) =>
+          item.id === report.id
+            ? {
+                ...item,
+                status,
+                assignedSectorId: assignedSectorId || item.assignedSectorId,
+                triageNotes: note || item.triageNotes,
+                updatedAt: new Date().toISOString(),
+                history: [
+                  {
+                    id: makeId('hist-den'),
+                    at: new Date().toISOString(),
+                    status,
+                    note: note || `Denuncia atualizada para ${status}.`,
+                    userId: currentUser.id,
+                  },
+                  ...item.history,
+                ],
+              }
+            : item,
+        ),
+      }),
+      'Atualizou denuncia',
+      'denuncias',
+      report.id,
+      `${report.protocol} atualizada para ${status}.`,
+    )
+    setTriageNote('')
+  }
+
+  const createTicketFromReport = (report: CitizenReport) => {
+    const team = data.teams.find((item) => item.sectorId === assignedSectorId) ?? data.teams[0]
+    const ticket: Ticket = {
+      id: makeId('ticket'),
+      number: nextProtocol('CH', data.tickets.map((item) => item.number)),
+      origin: 'Manual',
+      locationId: data.locations[0]?.id ?? '',
+      sectorId: assignedSectorId || (data.sectors[0]?.id ?? ''),
+      categoryId: report.categoryId,
+      description: `Denuncia ${report.protocol}: ${report.title}. ${report.description}`,
+      priority: 'Media',
+      teamId: team?.id ?? '',
+      dueDate: defaultDueDate(),
+      status: 'Aberto',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      history: [
+        {
+          id: makeId('hist'),
+          at: new Date().toISOString(),
+          userId: currentUser.id,
+          to: 'Aberto',
+          note: `Chamado criado a partir da denuncia ${report.protocol}.`,
+        },
+      ],
+      comments: [],
+      attachments: [...report.attachments],
+      completionEvidence: [],
+    }
+
+    commit(
+      (draft) => ({
+        ...draft,
+        tickets: [ticket, ...draft.tickets],
+        citizenReports: draft.citizenReports.map((item) =>
+          item.id === report.id
+            ? {
+                ...item,
+                status: 'Encaminhada',
+                assignedSectorId: assignedSectorId || item.assignedSectorId,
+                linkedTicketId: ticket.id,
+                updatedAt: new Date().toISOString(),
+                history: [
+                  {
+                    id: makeId('hist-den'),
+                    at: new Date().toISOString(),
+                    status: 'Encaminhada',
+                    note: `Chamado ${ticket.number} criado para atendimento.`,
+                    userId: currentUser.id,
+                  },
+                  ...item.history,
+                ],
+              }
+            : item,
+        ),
+      }),
+      'Criou chamado a partir de denuncia',
+      'denuncias',
+      report.id,
+      `${ticket.number} criado a partir de ${report.protocol}.`,
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionTitle eyebrow="Portal do cidadao" title="Denuncias recebidas" description="Triagem de protocolos enviados pelo celular, com fotos e geolocalizacao." />
+      <div className="grid gap-4 md:grid-cols-4">
+        <MetricCard icon={<AlertTriangle />} label="Recebidas" value={data.citizenReports.length} tone="blue" />
+        <MetricCard icon={<Search />} label="Em triagem" value={data.citizenReports.filter((item) => item.status === 'Em triagem').length} tone="amber" />
+        <MetricCard icon={<TicketCheck />} label="Encaminhadas" value={data.citizenReports.filter((item) => item.status === 'Encaminhada').length} tone="teal" />
+        <MetricCard icon={<CheckCircle2 />} label="Concluidas" value={data.citizenReports.filter((item) => item.status === 'Concluida').length} tone="emerald" />
+      </div>
+
+      <Card>
+        <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+          <Field label="Status">
+            <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              {['Todos', 'Recebida', 'Em triagem', 'Encaminhada', 'Vistoria agendada', 'Concluida', 'Arquivada'].map((status) => (
+                <option key={status}>{status}</option>
+              ))}
+            </select>
+          </Field>
+          <button type="button" className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold" onClick={() => setStatusFilter('Todos')}>
+            Limpar filtros
+          </button>
+        </div>
+      </Card>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_0.9fr]">
+        <Card>
+          <SectionTitle title="Protocolos" description={`${filtered.length} denuncia(s) exibida(s).`} />
+          <div className="mt-5 space-y-3">
+            {filtered.length === 0 && <EmptyState title="Nenhuma denuncia encontrada" text="Nao ha protocolos para o filtro aplicado." />}
+            {filtered.map((report) => (
+              <button
+                key={report.id}
+                type="button"
+                onClick={() => setSelectedId(report.id)}
+                className={clsx('w-full rounded-2xl border p-4 text-left transition', selected?.id === report.id ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="font-bold">{report.protocol}</p>
+                    <p className="mt-1 text-sm text-slate-700">{report.title}</p>
+                    <p className="mt-1 text-xs text-slate-500">{maps.serviceAreas[report.serviceAreaId ?? '']?.name} • {formatDate(report.createdAt)}</p>
+                  </div>
+                  <Badge className={citizenReportStatusColors[report.status]}>{report.status}</Badge>
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          {selected ? (
+            <div>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-[0.15em] text-slate-400">{selected.protocol}</p>
+                  <h3 className="text-2xl font-black">{selected.title}</h3>
+                  <p className="mt-1 text-sm text-slate-500">{maps.categories[selected.categoryId]?.name}</p>
+                </div>
+                <Badge className={citizenReportStatusColors[selected.status]}>{selected.status}</Badge>
+              </div>
+
+              <p className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">{selected.description}</p>
+              <div className="mt-5 grid gap-3 text-sm md:grid-cols-2">
+                <Info label="Endereco informado" value={selected.address || 'Nao informado'} />
+                <Info label="Coordenadas" value={formatCoordinates(selected.coordinates)} />
+                <Info label="Identificacao" value={selected.anonymous ? 'Anonima' : selected.citizenName} />
+                <Info label="Contato" value={selected.anonymous ? 'Nao informado' : selected.citizenContact} />
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-2">
+                {selected.attachments.map((attachment) => (
+                  <div key={attachment.id} className="w-28 rounded-2xl border border-slate-200 bg-white p-2">
+                    <img src={attachment.dataUrl} alt={attachment.name} className="h-20 w-full rounded-xl object-cover" />
+                    <p className="mt-2 truncate text-[10px] text-slate-500">{attachment.name}</p>
+                  </div>
+                ))}
+              </div>
+
+              {canTriage && (
+                <div className="mt-6 space-y-4">
+                  <Field label="Setor de encaminhamento">
+                    <select className={inputClass} value={assignedSectorId} onChange={(event) => setAssignedSectorId(event.target.value)}>
+                      {data.sectors.map((sector) => (
+                        <option key={sector.id} value={sector.id}>
+                          {sector.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Observacao de triagem">
+                    <textarea className={clsx(inputClass, 'min-h-24')} value={triageNote} onChange={(event) => setTriageNote(event.target.value)} />
+                  </Field>
+                  <div className="flex flex-wrap gap-2">
+                    <ActionButton onClick={() => updateReportStatus(selected, 'Em triagem', triageNote || 'Denuncia colocada em triagem.')}>Iniciar triagem</ActionButton>
+                    <ActionButton onClick={() => updateReportStatus(selected, 'Vistoria agendada', triageNote || 'Vistoria agendada para apuracao.')}>Agendar vistoria</ActionButton>
+                    <ActionButton onClick={() => createTicketFromReport(selected)}>Criar chamado</ActionButton>
+                    <ActionButton onClick={() => updateReportStatus(selected, 'Concluida', triageNote || 'Denuncia concluida.')}>Concluir</ActionButton>
+                    <ActionButton onClick={() => updateReportStatus(selected, 'Arquivada', triageNote || 'Denuncia arquivada pela triagem.')}>Arquivar</ActionButton>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6">
+                <p className="text-sm font-bold text-slate-900">Historico do protocolo</p>
+                <div className="mt-3 space-y-3">
+                  {selected.history.map((entry) => (
+                    <div key={entry.id} className="rounded-2xl border border-slate-200 p-3 text-sm">
+                      <p className="font-semibold">{entry.status}</p>
+                      <p className="text-slate-600">{entry.note}</p>
+                      <p className="mt-1 text-xs text-slate-400">{formatDate(entry.at)}{entry.userId ? ` • ${maps.users[entry.userId]?.name}` : ''}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <EmptyState title="Selecione uma denuncia" text="Use a lista para consultar dados, fotos e localizacao." />
           )}
         </Card>
       </div>

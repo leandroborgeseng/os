@@ -329,6 +329,7 @@ export const initialData: AppData = {
   inspections: [],
   tickets: baseTickets,
   nonConformities: [],
+  citizenReports: [],
   notifications: [
     {
       id: 'notif-1',

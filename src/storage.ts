@@ -75,7 +75,7 @@ export function makeId(prefix: string) {
   return `${prefix}-${crypto.randomUUID()}`
 }
 
-export function nextProtocol(prefix: 'VIS' | 'CH' | 'NC' | 'DOC', existingNumbers: string[]) {
+export function nextProtocol(prefix: 'VIS' | 'CH' | 'NC' | 'DOC' | 'DEN', existingNumbers: string[]) {
   const year = new Date().getFullYear()
   const lastSequence = existingNumbers.reduce((highest, number) => {
     const match = number.match(new RegExp(`^${prefix}-${year}-(\\d{4})$`))
