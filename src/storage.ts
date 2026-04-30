@@ -4,7 +4,18 @@ import type { AppData } from './types'
 const STORAGE_KEY = 'prefeitura-vistorias-chamados'
 
 function normalizeData(data: Partial<AppData>): AppData {
-  return { ...initialData, ...data } as AppData
+  const base = { ...initialData, ...data } as AppData
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+
+  return {
+    ...base,
+    officialDocuments: base.officialDocuments.map((document) => ({
+      ...document,
+      qrCodePayload:
+        document.qrCodePayload ||
+        (origin ? `${origin}/?documento=${encodeURIComponent(document.number)}` : `/?documento=${encodeURIComponent(document.number)}`),
+    })),
+  }
 }
 
 export function loadData(): AppData {

@@ -38,7 +38,16 @@ import {
 } from 'recharts'
 import { clsx } from 'clsx'
 import 'leaflet/dist/leaflet.css'
-import { isBluetoothPrintSupported, printerPresets, printEscPosTestPage, type PrinterPresetId } from './bluetoothPrinter'
+import QRCode from 'qrcode'
+import {
+  getStoredPrinterPreset,
+  isBluetoothPrintSupported,
+  printEscPosOfficialDocument,
+  printerPresets,
+  printEscPosTestPage,
+  type OfficialDocumentPrintPayload,
+  type PrinterPresetId,
+} from './bluetoothPrinter'
 import { loadData, loadRemoteData, makeId, nextProtocol, resetData, resetRemoteData, saveData, saveRemoteData } from './storage'
 import type {
   AppData,
@@ -692,7 +701,13 @@ function App() {
     setInstallPrompt(null)
   }
 
-  const portal = new URLSearchParams(window.location.search).get('portal')
+  const searchParams = new URLSearchParams(window.location.search)
+  const publicDocumentProtocol = searchParams.get('documento')
+  const portal = searchParams.get('portal')
+
+  if (publicDocumentProtocol?.trim()) {
+    return <PublicDocumentConsult data={data} protocolRaw={publicDocumentProtocol} />
+  }
 
   if (portal === 'cidadao') {
     return <CitizenPortal data={data} commitPublic={commitPublic} />
@@ -936,6 +951,78 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
           </div>
         </Card>
       </section>
+    </main>
+  )
+}
+
+function PublicDocumentConsult({ data, protocolRaw }: { data: AppData; protocolRaw: string }) {
+  const protocol = decodeURIComponent(protocolRaw).trim()
+  const found = data.officialDocuments.find((item) => item.number.toLowerCase() === protocol.toLowerCase())
+  const location = found ? data.locations.find((item) => item.id === found.locationId) : undefined
+  const area = found ? data.serviceAreas.find((item) => item.id === found.serviceAreaId) : undefined
+
+  return (
+    <main className="min-h-screen bg-slate-100 p-4 pb-16">
+      <div className="mx-auto max-w-lg space-y-4">
+        <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white">
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">Prefeitura Municipal</p>
+            <h1 className="text-lg font-black text-slate-950">Consulta de documento oficial</h1>
+          </div>
+        </div>
+
+        <Card>
+          <p className="text-sm text-slate-600">
+            Use esta pagina para confirmar se o numero do protocolo impresso no documento consta nos registros da fiscalizacao municipal. Os dados abaixo sao publicos apenas na medida necessaria para essa
+            verificacao.
+          </p>
+          <div className="mt-4 rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-slate-800">
+            Protocolo informado: <span className="font-mono text-slate-950">{protocol}</span>
+          </div>
+
+          {!found ? (
+            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm font-semibold text-amber-900">
+              Nao localizamos esse protocolo nesta base. Confira se o numero foi digitado corretamente ou procure o setor de fiscalizacao com o documento em maos.
+            </div>
+          ) : (
+            <div className="mt-5 space-y-4">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-sm font-semibold text-emerald-900">
+                Documento localizado na base municipal. Esta consulta confirma apenas a existencia do registro, conforme o protocolo abaixo.
+              </div>
+              <div className="grid gap-3 text-sm">
+                <Info label="Tipo" value={found.type} />
+                <Info label="Numero" value={found.number} />
+                <Info label="Situacao" value={found.status} />
+                <Info label="Emitido em" value={formatDate(found.createdAt)} />
+                <Info label="Local vinculado" value={location?.name} />
+                <Info label="Area de servico" value={area?.name} />
+              </div>
+              {found.printedAt && <Info label="Ultima impressao registrada" value={formatDate(found.printedAt)} />}
+              <p className="text-xs leading-relaxed text-slate-500">
+                O teor completo do documento, anexos e historico de tramitacao permanecem sob guarda da administracao municipal e podem ser solicitados pelos canais oficiais de atendimento.
+              </p>
+            </div>
+          )}
+        </Card>
+
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <a
+            href="/?portal=cidadao"
+            className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-bold text-slate-800 shadow-sm"
+          >
+            Registrar denuncia
+          </a>
+          <a
+            href="/"
+            className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-center text-sm font-bold text-white shadow-sm"
+          >
+            Acesso administrativo
+          </a>
+        </div>
+      </div>
     </main>
   )
 }
@@ -2963,6 +3050,48 @@ function ActionPlans({
   )
 }
 
+function OfficialDocumentQr({ payload }: { payload?: string | null }) {
+  const [src, setSrc] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!payload?.trim()) {
+      return
+    }
+
+    let cancelled = false
+
+    QRCode.toDataURL(payload.trim(), {
+      width: 168,
+      margin: 1,
+      color: { dark: '#0f172a', light: '#ffffff' },
+    })
+      .then((dataUrl) => {
+        if (!cancelled) {
+          setSrc(dataUrl)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSrc(null)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [payload])
+
+  if (!payload?.trim()) {
+    return <div className="grid size-36 shrink-0 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white text-center text-xs font-semibold text-slate-400">Sem link</div>
+  }
+
+  if (!src) {
+    return <div className="grid size-36 shrink-0 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white text-center text-xs font-semibold text-slate-400">Gerando QR...</div>
+  }
+
+  return <img src={src} alt="QR Code da consulta publica do documento" className="mx-auto size-36 shrink-0 rounded-2xl border border-white bg-white p-2 shadow-sm sm:mx-0" />
+}
+
 function OfficialDocuments({
   data,
   maps,
@@ -2981,6 +3110,23 @@ function OfficialDocuments({
   const selectedDocument = data.officialDocuments.find((document) => document.id === selectedDocumentId) ?? data.officialDocuments[0]
   const sourceNonConformity = data.nonConformities.find((item) => item.id === sourceNonConformityId)
   const canIssue = ['admin', 'gestor'].includes(currentUser.role)
+  type PrinterHint = 'idle' | 'printing' | 'success' | 'error'
+  const [printerHint, setPrinterHint] = useState<{ state: PrinterHint; text: string }>({ state: 'idle', text: '' })
+  const bluetoothAvailable = isBluetoothPrintSupported()
+
+  const buildThermalPayload = (document: OfficialDocument): OfficialDocumentPrintPayload => ({
+    type: document.type,
+    number: document.number,
+    status: document.status,
+    issuedAtLabel: new Date(document.createdAt).toLocaleString('pt-BR'),
+    locationLabel: maps.locations[document.locationId ?? '']?.name ?? '-',
+    areaLabel: maps.serviceAreas[document.serviceAreaId ?? '']?.name ?? '-',
+    facts: document.facts,
+    legalBasis: document.legalBasis,
+    measures: document.measures,
+    signaturesSummary: document.signatures.map((signature) => `${signature.signerName} (${signature.signerRole}) - ${signature.method}`),
+    verificationUrl: document.qrCodePayload,
+  })
 
   const createDocument = () => {
     if (!sourceNonConformity) return
@@ -3025,7 +3171,7 @@ function OfficialDocuments({
           notes: 'Documento emitido pelo fiscal responsavel no sistema.',
         },
       ],
-      qrCodePayload: `${window.location.origin}/?documento=${number}`,
+      qrCodePayload: `${window.location.origin}/?documento=${encodeURIComponent(number)}`,
     }
 
     commit(
@@ -3088,7 +3234,7 @@ function OfficialDocuments({
     setSignatureForm({ signerName: '', signerDocument: '', notes: '' })
   }
 
-  const markPrinted = (document: OfficialDocument) => {
+  const registerPrinted = (document: OfficialDocument) => {
     const now = new Date().toISOString()
     commit(
       (draft) => ({
@@ -3100,6 +3246,25 @@ function OfficialDocuments({
       document.id,
       `${document.number} marcado como impresso.`,
     )
+  }
+
+  const printViaBluetooth = async (document: OfficialDocument) => {
+    const preset = getStoredPrinterPreset()
+    setPrinterHint({ state: 'printing', text: 'Solicitando Bluetooth e enviando relatorio para a impressora...' })
+
+    try {
+      const printerName = await printEscPosOfficialDocument(preset, buildThermalPayload(document))
+      registerPrinted(document)
+      setPrinterHint({ state: 'success', text: `Comprovante enviado para ${printerName}. O sistema registrou a impressao.` })
+    } catch (error) {
+      setPrinterHint({
+        state: 'error',
+        text: error instanceof Error ? error.message : 'Nao foi possivel imprimir pelo Bluetooth. Ajuste o perfil em Impressao ou tente a impressao do navegador.',
+      })
+    }
+  }
+
+  const printBrowser = () => {
     window.print()
   }
 
@@ -3190,7 +3355,14 @@ function OfficialDocuments({
                   {selectedDocument.defenseDeadlineDays && <p><strong>Prazo de defesa:</strong> {selectedDocument.defenseDeadlineDays} dias.</p>}
                   {selectedDocument.regularizationDeadlineDays && <p><strong>Prazo de regularizacao:</strong> {selectedDocument.regularizationDeadlineDays} dias.</p>}
                   {selectedDocument.penalty && <p><strong>Penalidade prevista:</strong> {selectedDocument.penalty}</p>}
-                  <p className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs font-semibold">QR/Protocolo: {selectedDocument.qrCodePayload}</p>
+                  <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">Consulta publica (QR)</p>
+                      <p className="break-all text-xs font-semibold text-slate-700">{selectedDocument.qrCodePayload}</p>
+                      <p className="text-xs text-slate-500">Escaneie com o celular para validar o protocolo sem acesso ao sistema interno.</p>
+                    </div>
+                    <OfficialDocumentQr key={selectedDocument.id} payload={selectedDocument.qrCodePayload} />
+                  </div>
                 </div>
 
                 <div className="mt-6 border-t border-slate-200 pt-4">
@@ -3208,25 +3380,63 @@ function OfficialDocuments({
                 </div>
               </div>
 
-              <div className="mt-6 space-y-4">
-                <SectionTitle title="Registrar ciencia do responsavel" description="Use para assinatura em tela simplificada ou registro de recusa." />
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field label="Nome do responsavel">
-                    <input className={inputClass} value={signatureForm.signerName} onChange={(event) => setSignatureForm({ ...signatureForm, signerName: event.target.value })} />
+                <div className="mt-6 space-y-4">
+                  <SectionTitle title="Registrar ciencia do responsavel" description="Use para assinatura em tela simplificada ou registro de recusa." />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field label="Nome do responsavel">
+                      <input className={inputClass} value={signatureForm.signerName} onChange={(event) => setSignatureForm({ ...signatureForm, signerName: event.target.value })} />
+                    </Field>
+                    <Field label="CPF/CNPJ ou documento">
+                      <input className={inputClass} value={signatureForm.signerDocument} onChange={(event) => setSignatureForm({ ...signatureForm, signerDocument: event.target.value })} />
+                    </Field>
+                  </div>
+                  <Field label="Observacao">
+                    <textarea className={clsx(inputClass, 'min-h-20')} value={signatureForm.notes} onChange={(event) => setSignatureForm({ ...signatureForm, notes: event.target.value })} />
                   </Field>
-                  <Field label="CPF/CNPJ ou documento">
-                    <input className={inputClass} value={signatureForm.signerDocument} onChange={(event) => setSignatureForm({ ...signatureForm, signerDocument: event.target.value })} />
-                  </Field>
+                  <p className="text-xs font-semibold text-slate-600">
+                    Impressao termica: o perfil da impressora e o mesmo configurado em <span className="text-blue-700">Impressao</span> no menu (BLE FFE0 ou Nordic UART).
+                  </p>
+                  {printerHint.state !== 'idle' && (
+                    <div
+                      className={clsx(
+                        'rounded-2xl border p-3 text-sm font-semibold',
+                        printerHint.state === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-800',
+                        printerHint.state === 'error' && 'border-rose-200 bg-rose-50 text-rose-800',
+                        printerHint.state === 'printing' && 'border-sky-200 bg-sky-50 text-sky-900',
+                      )}
+                    >
+                      {printerHint.text}
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <ActionButton onClick={() => signDocument(selectedDocument)}>Registrar assinatura</ActionButton>
+                    <ActionButton onClick={() => signDocument(selectedDocument, true)}>Registrar recusa</ActionButton>
+                    <button
+                      type="button"
+                      onClick={() => printBrowser()}
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-800"
+                    >
+                      <Printer size={16} />
+                      Imprimir no navegador
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!bluetoothAvailable || printerHint.state === 'printing'}
+                      onClick={() => void printViaBluetooth(selectedDocument)}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                    >
+                      <Printer size={16} />
+                      Impressora Bluetooth
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => registerPrinted(selectedDocument)}
+                      className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-700"
+                    >
+                      Registrar impressao manual
+                    </button>
+                  </div>
                 </div>
-                <Field label="Observacao">
-                  <textarea className={clsx(inputClass, 'min-h-20')} value={signatureForm.notes} onChange={(event) => setSignatureForm({ ...signatureForm, notes: event.target.value })} />
-                </Field>
-                <div className="flex flex-wrap gap-2">
-                  <ActionButton onClick={() => signDocument(selectedDocument)}>Registrar assinatura</ActionButton>
-                  <ActionButton onClick={() => signDocument(selectedDocument, true)}>Registrar recusa</ActionButton>
-                  <ActionButton onClick={() => markPrinted(selectedDocument)}>Imprimir</ActionButton>
-                </div>
-              </div>
             </div>
           ) : (
             <EmptyState title="Nenhum documento selecionado" text="Gere ou selecione um documento oficial para visualizar." />
@@ -3706,11 +3916,10 @@ function PrintSettings() {
           </div>
 
           <div className="mt-5 space-y-3 text-sm text-slate-600">
-            <p className="font-bold text-slate-900">Proximos passos planejados</p>
-            <p>1. Gerar Auto de Infracao em HTML/PDF a partir da vistoria.</p>
-            <p>2. Capturar assinatura do responsavel no proprio PWA.</p>
-            <p>3. Imprimir o auto em ESC/POS e registrar data, fiscal, localizacao e status.</p>
-            <p>4. Salvar ciencia, recusa de assinatura ou falha de impressao no historico.</p>
+            <p className="font-bold text-slate-900">Fluxo em producao</p>
+            <p>1. Emita o documento oficial na area administrativa e assine em campo quando necessario.</p>
+            <p>2. Use a impressao Bluetooth nesta tela ou envie o texto pela impressora configurada (perfil acima).</p>
+            <p>3. O QR no comprovante leva a consulta publica do protocolo, sem exigir login.</p>
           </div>
         </Card>
       </div>
