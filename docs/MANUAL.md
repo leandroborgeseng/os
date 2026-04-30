@@ -1,6 +1,6 @@
 # Manual do sistema — Vistorias, chamados e fiscalização municipal
 
-Versão do manual: **0.1.0** (alinhada à versão `0.1.0` do changelog; atualize ambos a cada entrega.)
+Versão do manual: **0.1.1** (alinhada à versão `0.1.1` do changelog; atualize ambos a cada entrega.)
 
 Este documento descreve as **funcionalidades já implementadas** no MVP, do ponto de vista de quem usa o sistema (gestores, fiscais, equipes e cidadãos). Para desenvolvedores: veja também `README.md`, `CHANGELOG.md` e `docs/ITERACOES.md`.
 
@@ -42,7 +42,7 @@ O sistema reúne:
 - **Documentos oficiais** (autos, notificações, etc.) com QR para consulta pública e opções de impressão.
 - **Painel** de indicadores e **auditoria** de ações administrativas (escopo do MVP).
 
-Stack resumida: interface web responsiva (PWA), API Node, banco PostgreSQL; em deploy único, o servidor entrega o front compilado e a API.
+Stack resumida: interface web responsiva (PWA) com **identidade visual institucional** configurável (logo em `public/`), API Node, banco PostgreSQL; em deploy único, o servidor entrega o front compilado e a API.
 
 ---
 
@@ -73,6 +73,7 @@ O login atual é **demonstrativo**: escolha um usuário na lista e use a senha i
 | Área administrativa | `/` (após login) |
 | Portal do cidadão | `/?portal=cidadao` |
 | Consulta pública de documento | `/?documento=DOC-ANO-NNNN` (número exato do protocolo; use o valor codificado pelo sistema quando aplicável) |
+| Pré-selecionar denúncia na tela de vistorias | `/?vincularDenuncia=<id>` — ao abrir **Vistorias**, o protocolo correspondente aparece no campo opcional (a URL é normalmente aplicada pelo botão na triagem de denúncias) |
 | Atalho de menu após login | `/?atalho=<id>` — ex.: `/?atalho=vistorias` |
 
 IDs úteis de atalho: `dashboard`, `cadastros`, `roteiros`, `denuncias`, `vistorias`, `planos`, `documentos`, `chamados`, `relatorios`, `impressao`, `auditoria`.
@@ -146,13 +147,14 @@ Alterações aqui refletem nas **novas** vistorias que selecionarem esse roteiro
 **Fluxo resumido:**
 
 1. Informe **área de serviço**, **tipo**, **roteiro** (quando houver), **setor**, **local**, **categoria** (exigência do modelo atual).
-2. Responda cada item (conforme / não conforme / não se aplica), observações e fotos.
-3. Use o **mapa** para marcar posição: GPS, busca de endereço (requer rede) ou clique no mapa.
-4. **Finalizar** exige **geolocalização** preenchida.
-5. Para itens **não conformes** com **evidência obrigatória**, é necessário **ao menos uma foto** por item antes de finalizar.
-6. Ao finalizar com não conformidades: o sistema pode gerar **registros de não conformidade** e **chamados** (origem “Vistoria”) conforme regras de cada pergunta.
+2. Opcionalmente vincule uma **denúncia** (protocolo do portal) ao **finalizar** a vistoria: o protocolo passa a referenciar esta inspeção em campo (rastreio na própria ficha da denúncia). Trocar a área de serviço limpa essa seleção.
+3. Responda cada item (conforme / não conforme / não se aplica), observações e fotos.
+4. Use o **mapa** para marcar posição: GPS, busca de endereço (requer rede) ou clique no mapa.
+5. **Finalizar** exige **geolocalização** preenchida.
+6. Para itens **não conformes** com **evidência obrigatória**, é necessário **ao menos uma foto** por item antes de finalizar.
+7. Ao finalizar com não conformidades: o sistema pode gerar **registros de não conformidade** e **chamados** (origem “Vistoria”) conforme regras de cada pergunta; uma mensagem na tela oferece ir a **Planos de ação**.
 
-**Rascunho:** salva inspeção sem exigir o mesmo rigor de finalização.
+**Rascunho:** salva inspeção sem exigir o mesmo rigor de finalização (o vínculo com denúncia só é gravado ao **finalizar**).
 
 ---
 
@@ -164,7 +166,7 @@ Alterações aqui refletem nas **novas** vistorias que selecionarem esse roteiro
 
 **Funcionalidades:**
 
-- Lista com filtros (status, criticidade, etc., conforme a interface).
+- Lista com filtros (status, criticidade, etc., conforme a interface). Listas vazias podem exibir um botão para **Ir para Vistorias** ou **Limpar filtros**, conforme o caso.
 - Detalhe: prazos, equipe, vínculo com vistoria, evidências.
 - **Mudança de status** (ex.: aberta, em adequação, corrigida, validada) com observação.
 - **Anexar evidências** adicionais.
@@ -194,11 +196,13 @@ Alterações aqui refletem nas **novas** vistorias que selecionarem esse roteiro
 **Funcionalidades:**
 
 - Métricas resumidas (recebidas, triagem, encaminhadas, grupos).
-- Filtro por status; botão limpar filtros.
+- Filtro por status; botão limpar filtros (e CTA quando a lista está vazia só por causa do filtro).
+- **Andamento do protocolo**: passos visuais **Triagem → Vistoria → Documento**, alinhados ao status, à vistoria vinculada e a documentos oficiais com o mesmo protocolo.
 - Detalhe da denúncia: texto, categoria, área, mapa (se houver coordenadas), anexos.
 - Se pertencer a um **grupo**: exibe quantos protocolos compõem o mesmo caso aproximado.
 - **Alterar status** e registrar **notas de triagem**.
 - **Criar chamado** vinculado (setor/equipe conforme seleção na tela).
+- Se a denúncia ainda não tiver vistoria em campo vinculada: botão para abrir **Vistorias** com o protocolo **pré-selecionado** (atalho operacional).
 
 **Quem acessa:** admin, gestor e consulta (conforme menu).
 

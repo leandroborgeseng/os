@@ -8,19 +8,32 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/), e o
 
 ## [Unreleased]
 
+### Como documentar a próxima entrega
+
+1. Mova itens de **Unreleased** para uma nova seção com número de versão e data.
+2. Atualize `package.json` (`version`) e o **Manual do usuário** (`docs/MANUAL.md`) conforme novas telas ou fluxos.
+3. Veja o guia rápido em `docs/ITERACOES.md`.
+
+---
+
+## [0.1.1] — 2026-04-30
+
+### Adicionado
+
+- **Marca institucional**: componente `PrefeituraLogo`, `public/prefeitura-marca.svg` (substituível pelo brasão oficial), favicon e ícone PWA alinhados às cores **#0066B3** e **#2DBE10**.
+- **`citizenReportId`** na vistoria e vínculo **denúncia ↔ vistoria**: ao **finalizar** a vistoria, preenche `linkedInspectionId` no protocolo, histórico e notificação; campo opcional no formulário; parâmetro de URL `?vincularDenuncia=<id>` e botão na triagem **Abrir vistorias com este protocolo pré-selecionado**.
+- **Rastreador de andamento** na ficha da denúncia: passos **Triagem → Vistoria → Documento** (com número da vistoria quando vinculada).
+- **Estados vazios** com CTA principal (ex.: planos sem NC → Ir para Vistorias; filtros vazios → Limpar filtros).
+- **Toast** após finalizar vistoria, com ação **Ver planos de ação gerados** quando houver não conformidades novas.
+
 ### Alterado (UX)
 
 - Menu lateral agrupado por **etapas do trabalho** (Visão geral, Planejamento, Campo e fiscalização, Cidadão e demandas, Indicadores, Auditoria).
 - Cabeçalho com **contexto**: nome do grupo, título da página e **texto de ajuda** por tela.
 - **Painel**: cartão **Fluxo de trabalho** com atalhos numerados (ordem sugerida), adaptada ao perfil (admin, gestor, executor, consulta).
 - **Mobile**: barra inferior com **atalhos por perfil** + botão **Mais** para abrir o menu completo (evita ficar preso às quatro primeiras páginas).
-- **Login**: resumo do **fluxo típico do fiscal** para orientar antes de entrar.
-
-### Como documentar a próxima entrega
-
-1. Mova itens de **Unreleased** para uma nova seção com número de versão e data.
-2. Atualize `package.json` (`version`) e o **Manual do usuário** (`docs/MANUAL.md`) conforme novas telas ou fluxos.
-3. Veja o guia rápido em `docs/ITERACOES.md`.
+- **Login** e telas públicas: uso da marca; botões e realces na paleta **#0066B3**; `theme-color` **#0066B3** em `index.html`.
+- **Vistorias recentes**: exibe protocolo de denúncia quando a vistoria está vinculada.
 
 ---
 
@@ -62,6 +75,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/), e o
 
 ---
 
-<!-- Ao publicar no GitHub, crie a tag v0.1.0 e ajuste os links abaixo se desejar. -->
-[Unreleased]: https://github.com/leandroborgeseng/os/compare/v0.1.0...HEAD
+<!-- Ao publicar no GitHub, crie tags v0.1.1, v0.1.0 e ajuste os links abaixo se desejar. -->
+[Unreleased]: https://github.com/leandroborgeseng/os/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/leandroborgeseng/os/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/leandroborgeseng/os/tree/v0.1.0

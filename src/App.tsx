@@ -50,6 +50,7 @@ import {
   type OfficialDocumentPrintPayload,
   type PrinterPresetId,
 } from './bluetoothPrinter'
+import { PrefeituraLogo } from './PrefeituraLogo'
 import { loadData, loadRemoteData, makeId, nextProtocol, resetData, resetRemoteData, saveData, saveRemoteData } from './storage'
 import type {
   AppData,
@@ -366,14 +367,18 @@ function Badge({ children, className }: { children: ReactNode; className?: strin
   return <span className={clsx('inline-flex rounded-full px-2.5 py-1 text-xs font-semibold', className)}>{children}</span>
 }
 
-function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <section className={clsx('rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5', className)}>{children}</section>
+function Card({ children, className, id }: { children: ReactNode; className?: string; id?: string }) {
+  return (
+    <section id={id} className={clsx('rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5', className)}>
+      {children}
+    </section>
+  )
 }
 
 function SectionTitle({ eyebrow, title, description }: { eyebrow?: string; title: string; description?: string }) {
   return (
     <div>
-      {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">{eyebrow}</p>}
+      {eyebrow && <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">{eyebrow}</p>}
       <h2 className="mt-1 text-xl font-bold text-slate-950 sm:text-2xl">{title}</h2>
       {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
     </div>
@@ -394,11 +399,101 @@ const inputClass =
 
 const defaultMapCenter: L.LatLngExpression = [-23.55052, -46.633308]
 
-function EmptyState({ title, text }: { title: string; text: string }) {
+function EmptyState({ title, text, ctaLabel, onCta }: { title: string; text: string; ctaLabel?: string; onCta?: () => void }) {
   return (
     <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5 text-center sm:p-8">
       <p className="font-semibold text-slate-800">{title}</p>
       <p className="mt-1 text-sm text-slate-500">{text}</p>
+      {ctaLabel && onCta && (
+        <button
+          type="button"
+          className="mt-5 inline-flex items-center justify-center rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white shadow-md shadow-[#0066B3]/20 transition hover:bg-[#005a9e]"
+          onClick={onCta}
+        >
+          {ctaLabel}
+        </button>
+      )}
+    </div>
+  )
+}
+
+function CitizenReportFlowTracker({
+  report,
+  officialDocuments,
+  inspections,
+}: {
+  report: CitizenReport
+  officialDocuments: OfficialDocument[]
+  inspections: Inspection[]
+}) {
+  const linkedDoc = officialDocuments.find((doc) => doc.citizenReportId === report.id)
+  const linkedInspection = report.linkedInspectionId ? inspections.find((i) => i.id === report.linkedInspectionId) : undefined
+  const triagemOk = !['Recebida', 'Em triagem'].includes(report.status)
+  const vistoriaOk = Boolean(report.linkedInspectionId) || report.status === 'Vistoria agendada' || report.status === 'Concluida'
+  const documentoOk = Boolean(linkedDoc)
+
+  const steps: { label: string; detail: string; done: boolean }[] = [
+    {
+      label: 'Triagem',
+      detail: triagemOk ? 'Protocolo encaminhado pela equipe.' : 'Aguardando analise inicial.',
+      done: triagemOk,
+    },
+    {
+      label: 'Vistoria',
+      detail: vistoriaOk
+        ? linkedInspection
+          ? `Registro em campo: ${linkedInspection.number}.`
+          : report.linkedInspectionId
+            ? 'Vistoria em campo vinculada ao protocolo.'
+            : report.status === 'Vistoria agendada'
+              ? 'Vistoria agendada.'
+              : 'Etapa encerrada (sem campo ou com encerramento administrativo).'
+        : 'Pendente de agendamento ou execucao em campo.',
+      done: vistoriaOk,
+    },
+    {
+      label: 'Documento',
+      detail: documentoOk ? `Documento emitido: ${linkedDoc?.number ?? ''}.` : 'Nenhum documento oficial vinculado a este protocolo.',
+      done: documentoOk,
+    },
+  ]
+
+  const activeIndex = steps.findIndex((s) => !s.done)
+  const lane = steps.map((step, index) => {
+    const current = activeIndex === index
+    const showLine = index < steps.length - 1
+    const lineDone = step.done
+
+    return (
+      <li key={step.label} className="relative flex gap-4">
+        <div className="flex flex-col items-center">
+          <div
+            className={clsx(
+              'relative z-10 grid size-10 shrink-0 place-items-center rounded-full text-sm font-black',
+              step.done ? 'bg-emerald-100 text-emerald-800' : current ? 'bg-[#0066B3] text-white shadow-md shadow-[#0066B3]/25' : 'bg-slate-200 text-slate-600',
+            )}
+          >
+            {step.done ? <CheckCircle2 size={20} /> : index + 1}
+          </div>
+          {showLine && (
+            <div
+              className={clsx('mt-1 w-0.5 flex-1 min-h-[1.25rem] grow', lineDone ? 'bg-emerald-300' : 'bg-slate-200')}
+              aria-hidden
+            />
+          )}
+        </div>
+        <div className={clsx('min-w-0 pb-6', !showLine && 'pb-0')}>
+          <p className="font-bold text-slate-900">{step.label}</p>
+          <p className="mt-1 text-xs leading-relaxed text-slate-600">{step.detail}</p>
+        </div>
+      </li>
+    )
+  })
+
+  return (
+    <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 pe-2">
+      <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Andamento do protocolo</p>
+      <ol className="mt-4 list-none">{lane}</ol>
     </div>
   )
 }
@@ -633,7 +728,7 @@ function MapPicker({ value, onChange }: { value?: Coordinates | null; onChange: 
             <p className="text-sm font-bold text-slate-900">Geolocalizacao da vistoria</p>
             <p className="text-xs text-slate-500">Busque por endereco/CEP, toque no mapa ou use o GPS do dispositivo.</p>
           </div>
-          <button type="button" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white" onClick={locate}>
+          <button type="button" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0066B3] px-4 py-3 text-sm font-bold text-white" onClick={locate}>
             <MapPin size={16} />
             Usar minha localizacao
           </button>
@@ -835,13 +930,13 @@ function App() {
       return <InspectionScriptsAdmin data={data} maps={maps} currentUser={currentUser} commit={commit} />
     }
     if (activePage === 'denuncias') {
-      return <CitizenReportsAdmin data={data} maps={maps} currentUser={currentUser} commit={commit} />
+      return <CitizenReportsAdmin data={data} maps={maps} currentUser={currentUser} commit={commit} onNavigate={setActivePage} />
     }
     if (activePage === 'vistorias') {
-      return <Inspections data={data} maps={maps} currentUser={currentUser} commit={commit} />
+      return <Inspections data={data} maps={maps} currentUser={currentUser} commit={commit} onNavigate={setActivePage} />
     }
     if (activePage === 'planos') {
-      return <ActionPlans data={data} maps={maps} currentUser={currentUser} commit={commit} />
+      return <ActionPlans data={data} maps={maps} currentUser={currentUser} commit={commit} onNavigate={setActivePage} />
     }
     if (activePage === 'documentos') {
       return <OfficialDocuments data={data} maps={maps} currentUser={currentUser} commit={commit} />
@@ -871,13 +966,11 @@ function App() {
         )}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="grid size-11 place-items-center rounded-2xl bg-blue-600">
-              <ShieldCheck size={24} />
-            </div>
-            <div>
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-blue-200">Prefeitura</p>
-              <h1 className="text-lg font-bold">Vistorias e Chamados</h1>
+          <div className="flex min-w-0 items-center gap-3">
+            <PrefeituraLogo size="md" alt="" />
+            <div className="min-w-0">
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-sky-200">Prefeitura</p>
+              <h1 className="truncate text-lg font-bold leading-tight">Vistorias e Chamados</h1>
             </div>
           </div>
           <button className="lg:hidden" type="button" onClick={() => setSidebarOpen(false)} aria-label="Fechar menu">
@@ -906,7 +999,7 @@ function App() {
                       }}
                       className={clsx(
                         'flex w-full items-center gap-3 rounded-2xl px-4 py-2.5 text-left text-sm font-semibold transition',
-                        activePage === page.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-white/10 hover:text-white',
+                        activePage === page.id ? 'bg-[#0066B3] text-white shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-white/10 hover:text-white',
                       )}
                     >
                       {page.icon}
@@ -940,7 +1033,7 @@ function App() {
               <Menu size={20} />
             </button>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-blue-600">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#0066B3]">
                 {activePageMeta && <span>{navGroupMeta[activePageMeta.group].label}</span>}
                 {activePageMeta && (
                   <>
@@ -955,14 +1048,14 @@ function App() {
               <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-slate-600">{activePageMeta?.hint}</p>
             </div>
             <div className="ml-auto hidden items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2 md:flex">
-              <CalendarClock size={18} className="text-blue-600" />
+              <CalendarClock size={18} className="text-[#0066B3]" />
               <span className="text-sm font-semibold">{new Intl.DateTimeFormat('pt-BR', { dateStyle: 'full' }).format(new Date())}</span>
             </div>
             {installPrompt && (
               <button
                 type="button"
                 onClick={requestInstall}
-                className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-3 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 sm:px-4 sm:py-2"
+                className="inline-flex items-center gap-2 rounded-2xl bg-[#0066B3] px-3 py-3 text-sm font-bold text-white shadow-lg shadow-[#0066B3]/25 sm:px-4 sm:py-2"
               >
                 <Download size={16} />
                 <span className="hidden sm:inline">Instalar app</span>
@@ -1005,7 +1098,7 @@ function App() {
                   onClick={() => setActivePage(page.id)}
                   className={clsx(
                     'flex min-h-[3.25rem] flex-col items-center justify-center gap-0.5 rounded-2xl px-1 text-[10px] font-bold leading-tight transition',
-                    activePage === page.id ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100',
+                    activePage === page.id ? 'bg-[#0066B3] text-white' : 'text-slate-500 hover:bg-slate-100',
                   )}
                 >
                   {page.icon}
@@ -1038,17 +1131,15 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,#2563eb55,transparent_35%),radial-gradient(circle_at_bottom_right,#0f766e55,transparent_35%)]" />
         <div className="relative z-10 flex h-full flex-col justify-between">
           <div className="flex items-center gap-3">
-            <div className="grid size-12 place-items-center rounded-2xl bg-blue-600">
-              <ShieldCheck size={26} />
-            </div>
+            <PrefeituraLogo size="lg" className="ring-2 ring-white/25 shadow-lg shadow-black/20" alt="" />
             <div>
-              <p className="text-sm font-bold uppercase tracking-[0.2em] text-blue-200">Prefeitura</p>
+              <p className="text-sm font-bold uppercase tracking-[0.2em] text-sky-200">Prefeitura</p>
               <h1 className="text-2xl font-bold">Vistorias e Chamados</h1>
             </div>
           </div>
 
           <div className="my-10 max-w-2xl sm:my-16">
-            <Badge className="bg-white/10 text-blue-100">MVP funcional com dados mockados</Badge>
+            <Badge className="bg-white/10 text-sky-100">MVP funcional com dados mockados</Badge>
             <h2 className="mt-5 text-3xl font-black tracking-tight sm:text-4xl lg:text-6xl">Controle vistorias, nao conformidades e execucao em um so lugar.</h2>
             <p className="mt-4 max-w-xl text-base text-slate-300 sm:text-lg">
               Plataforma responsiva para fiscalizacao em campo, abertura de chamados, acompanhamento por SLA e relatorios gerenciais.
@@ -1065,6 +1156,13 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
 
       <section className="flex items-center justify-center bg-slate-100 p-4 sm:p-6">
         <Card className="w-full max-w-md">
+          <div className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4">
+            <PrefeituraLogo size="sm" />
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">Prefeitura Municipal</p>
+              <p className="text-sm font-semibold text-slate-600">Identifique-se para acessar o sistema</p>
+            </div>
+          </div>
           <SectionTitle title="Entrar no sistema" description="Selecione um perfil para acessar o prototipo. A senha e apenas demonstrativa." />
           <div className="mt-6 space-y-4">
             <Field label="Usuario">
@@ -1081,7 +1179,7 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
             </Field>
             <button
               type="button"
-              className="w-full rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-600/20 transition hover:bg-blue-700"
+              className="w-full rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#0066B3]/25 transition hover:bg-[#005a9e]"
               onClick={() => {
                 const user = data.users.find((item) => item.id === selectedUserId)
                 if (user) onLogin(user)
@@ -1091,7 +1189,7 @@ function LoginPage({ data, onLogin }: { data: AppData; onLogin: (user: User) => 
             </button>
             <a
               href="/?portal=cidadao"
-              className="block w-full rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-center text-sm font-bold text-blue-700 transition hover:bg-blue-100"
+              className="block w-full rounded-2xl border border-[#0066B3]/25 bg-sky-50 px-5 py-3 text-center text-sm font-bold text-[#0066B3] transition hover:bg-sky-100"
             >
               Registrar denuncia como cidadao
             </a>
@@ -1130,11 +1228,9 @@ function PublicDocumentConsult({ data, protocolRaw }: { data: AppData; protocolR
     <main className="min-h-screen bg-slate-100 p-4 pb-16">
       <div className="mx-auto max-w-lg space-y-4">
         <div className="flex items-center gap-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-blue-600 text-white">
-            <ShieldCheck size={24} />
-          </div>
+          <PrefeituraLogo size="md" />
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">Prefeitura Municipal</p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">Prefeitura Municipal</p>
             <h1 className="text-lg font-black text-slate-950">Consulta de documento oficial</h1>
           </div>
         </div>
@@ -1182,7 +1278,7 @@ function PublicDocumentConsult({ data, protocolRaw }: { data: AppData; protocolR
           </a>
           <a
             href="/"
-            className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-center text-sm font-bold text-white shadow-sm"
+            className="inline-flex items-center justify-center rounded-2xl bg-[#0066B3] px-4 py-3 text-center text-sm font-bold text-white shadow-sm"
           >
             Acesso administrativo
           </a>
@@ -1333,11 +1429,9 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
       <div className="mx-auto max-w-3xl space-y-5">
         <header className="rounded-[2rem] bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/15">
           <div className="flex items-center gap-3">
-            <div className="grid size-12 place-items-center rounded-2xl bg-blue-600">
-              <ShieldCheck size={26} />
-            </div>
+            <PrefeituraLogo size="lg" className="ring-2 ring-white/25 shadow-lg shadow-black/20" alt="" />
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-200">Portal do cidadao</p>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-sky-200">Portal do cidadao</p>
               <h1 className="text-xl font-black">Registrar denuncia</h1>
             </div>
           </div>
@@ -1384,7 +1478,7 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
               <p className="text-sm font-bold">Geolocalizacao</p>
               <p className="mt-1 text-xs text-slate-500">No celular, permita o acesso ao GPS para enviar a localizacao aproximada da ocorrencia.</p>
               <div className="mt-3 rounded-xl bg-white p-3 text-xs font-semibold text-slate-600">{formatCoordinates(form.coordinates)}</div>
-              <button type="button" className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white" onClick={captureLocation}>
+              <button type="button" className="mt-3 inline-flex items-center gap-2 rounded-2xl bg-[#0066B3] px-4 py-3 text-sm font-bold text-white" onClick={captureLocation}>
                 <MapPin size={16} />
                 Usar localizacao atual
               </button>
@@ -1424,7 +1518,7 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
               </div>
             )}
 
-            <button type="button" disabled={isSubmitting} onClick={submitReport} className="w-full rounded-2xl bg-blue-600 px-5 py-4 text-sm font-bold text-white shadow-lg shadow-blue-600/20 disabled:opacity-50">
+            <button type="button" disabled={isSubmitting} onClick={submitReport} className="w-full rounded-2xl bg-[#0066B3] px-5 py-4 text-sm font-bold text-white shadow-lg shadow-[#0066B3]/25 disabled:opacity-50">
               Enviar denuncia
             </button>
             <a href="/" className="block text-center text-sm font-bold text-blue-700">Acessar area administrativa</a>
@@ -1494,7 +1588,7 @@ function DashboardWorkflowStrip({
     <Card className="border-sky-200 bg-gradient-to-br from-sky-50/90 via-white to-white">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-blue-600">
+          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">
             <Sparkles size={14} className="shrink-0 text-blue-500" aria-hidden />
             Fluxo de trabalho
           </p>
@@ -1512,7 +1606,7 @@ function DashboardWorkflowStrip({
               onClick={() => onNavigate(step.page)}
               className="flex w-full items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:border-blue-200 hover:bg-blue-50/60"
             >
-              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue-600 text-sm font-black text-white">{index + 1}</span>
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#0066B3] text-sm font-black text-white">{index + 1}</span>
               <span className="min-w-0">
                 <span className="block font-bold text-slate-900">{step.title}</span>
                 <span className="mt-0.5 block text-xs font-semibold leading-snug text-slate-600">{step.desc}</span>
@@ -1779,7 +1873,7 @@ function Registrations({
               </select>
             </Field>
           </div>
-          <button type="button" disabled={!canEdit} onClick={saveLocation} className="mt-4 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+          <button type="button" disabled={!canEdit} onClick={saveLocation} className="mt-4 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
             {locationForm.id ? 'Salvar alteracoes' : 'Novo local'}
           </button>
 
@@ -1862,7 +1956,7 @@ function Registrations({
               </Field>
             </div>
           </div>
-          <button type="button" disabled={!canEdit} onClick={saveChecklist} className="mt-4 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+          <button type="button" disabled={!canEdit} onClick={saveChecklist} className="mt-4 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
             {checklistForm.id ? 'Salvar item' : 'Novo item'}
           </button>
 
@@ -2100,7 +2194,7 @@ function InspectionScriptsAdmin({
             <Field label="Descricao">
               <textarea className={clsx(inputClass, 'min-h-24')} value={areaForm.description} onChange={(event) => setAreaForm({ ...areaForm, description: event.target.value })} />
             </Field>
-            <button type="button" disabled={!canEdit} onClick={saveArea} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={!canEdit} onClick={saveArea} className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
               {areaForm.id ? 'Salvar area' : 'Adicionar area'}
             </button>
           </div>
@@ -2127,7 +2221,7 @@ function InspectionScriptsAdmin({
             <Field label="Descricao">
               <textarea className={clsx(inputClass, 'min-h-24')} value={typeForm.description} onChange={(event) => setTypeForm({ ...typeForm, description: event.target.value })} />
             </Field>
-            <button type="button" disabled={!canEdit} onClick={saveType} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={!canEdit} onClick={saveType} className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
               {typeForm.id ? 'Salvar tipo' : 'Adicionar tipo'}
             </button>
           </div>
@@ -2168,7 +2262,7 @@ function InspectionScriptsAdmin({
             <Field label="Descricao">
               <textarea className={clsx(inputClass, 'min-h-24')} value={scriptForm.description} onChange={(event) => setScriptForm({ ...scriptForm, description: event.target.value })} />
             </Field>
-            <button type="button" disabled={!canEdit} onClick={saveScript} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+            <button type="button" disabled={!canEdit} onClick={saveScript} className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
               {scriptForm.id ? 'Salvar roteiro' : 'Adicionar roteiro'}
             </button>
           </div>
@@ -2280,7 +2374,7 @@ function InspectionScriptsAdmin({
                     </label>
                   ))}
                 </div>
-                <button type="button" disabled={!canEdit || selectedSections.length === 0} onClick={saveQuestion} className="mt-4 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+                <button type="button" disabled={!canEdit || selectedSections.length === 0} onClick={saveQuestion} className="mt-4 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
                   {questionForm.id ? 'Salvar pergunta' : 'Adicionar pergunta'}
                 </button>
               </div>
@@ -2354,11 +2448,13 @@ function CitizenReportsAdmin({
   maps,
   currentUser,
   commit,
+  onNavigate,
 }: {
   data: AppData
   maps: AppMaps
   currentUser: User
   commit: (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => void
+  onNavigate?: (page: Page) => void
 }) {
   const [statusFilter, setStatusFilter] = useState('Todos')
   const [selectedId, setSelectedId] = useState(data.citizenReports[0]?.id ?? '')
@@ -2496,7 +2592,14 @@ function CitizenReportsAdmin({
         <Card>
           <SectionTitle title="Protocolos" description={`${filtered.length} denuncia(s) exibida(s).`} />
           <div className="mt-5 space-y-3">
-            {filtered.length === 0 && <EmptyState title="Nenhuma denuncia encontrada" text="Nao ha protocolos para o filtro aplicado." />}
+            {filtered.length === 0 && (
+              <EmptyState
+                title="Nenhuma denuncia encontrada"
+                text={data.citizenReports.length === 0 ? 'Nao ha protocolos na base neste momento.' : 'Nao ha protocolos para o filtro aplicado.'}
+                ctaLabel={data.citizenReports.length > 0 ? 'Limpar filtro de status' : undefined}
+                onCta={data.citizenReports.length > 0 ? () => setStatusFilter('Todos') : undefined}
+              />
+            )}
             {filtered.map((report) => (
               <button
                 key={report.id}
@@ -2533,6 +2636,23 @@ function CitizenReportsAdmin({
                 </div>
                 <Badge className={citizenReportStatusColors[selected.status]}>{selected.status}</Badge>
               </div>
+
+              <CitizenReportFlowTracker report={selected} officialDocuments={data.officialDocuments} inspections={data.inspections} />
+
+              {canTriage && onNavigate && !selected.linkedInspectionId && selected.status !== 'Arquivada' && (
+                <button
+                  type="button"
+                  className="mt-4 w-full rounded-2xl border border-[#0066B3]/25 bg-sky-50 px-4 py-3 text-sm font-bold text-[#0066B3] transition hover:bg-sky-100"
+                  onClick={() => {
+                    const url = new URL(window.location.href)
+                    url.searchParams.set('vincularDenuncia', selected.id)
+                    window.history.replaceState({}, '', url)
+                    onNavigate('vistorias')
+                  }}
+                >
+                  Abrir vistorias com este protocolo pre-selecionado
+                </button>
+              )}
 
               <p className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">{selected.description}</p>
               {selectedGroup && (
@@ -2631,11 +2751,13 @@ function Inspections({
   maps,
   currentUser,
   commit,
+  onNavigate,
 }: {
   data: AppData
   maps: AppMaps
   currentUser: User
   commit: (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => void
+  onNavigate?: (page: Page) => void
 }) {
   const defaultScript = data.inspectionScripts.find((script) => script.active) ?? data.inspectionScripts[0]
   const [form, setForm] = useState({
@@ -2647,8 +2769,44 @@ function Inspections({
     categoryId: data.categories[0]?.id ?? '',
     generalNotes: '',
     coordinates: null as Coordinates | null,
+    citizenReportId: '',
   })
   const [formError, setFormError] = useState('')
+  const [finishHint, setFinishHint] = useState<{ ncCount: number; inspectionNumber: string } | null>(null)
+
+  useEffect(() => {
+    if (!finishHint) return
+    const timer = window.setTimeout(() => setFinishHint(null), 10000)
+    return () => window.clearTimeout(timer)
+  }, [finishHint])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const vincular = params.get('vincularDenuncia')
+    if (!vincular) return
+
+    const report = data.citizenReports.find((r) => r.id === vincular && !r.linkedInspectionId && r.status !== 'Arquivada')
+    if (report) {
+      queueMicrotask(() => {
+        setForm((previous) => ({ ...previous, citizenReportId: report.id }))
+      })
+    }
+
+    params.delete('vincularDenuncia')
+    const rest = params.toString()
+    window.history.replaceState({}, '', `${window.location.pathname}${rest ? `?${rest}` : ''}${window.location.hash}`)
+  }, [data.citizenReports])
+
+  const linkableCitizenReports = useMemo(
+    () =>
+      data.citizenReports.filter((r) => {
+        if (r.linkedInspectionId || r.status === 'Arquivada') return false
+        const areaMatches = !r.serviceAreaId || r.serviceAreaId === form.serviceAreaId
+        const pinned = r.id === form.citizenReportId
+        return areaMatches || pinned
+      }),
+    [data.citizenReports, form.serviceAreaId, form.citizenReportId],
+  )
 
   const selectedScript = data.inspectionScripts.find((script) => script.id === form.scriptId)
   const availableTypes = data.inspectionTypes.filter((type) => type.serviceAreaId === form.serviceAreaId)
@@ -2706,6 +2864,20 @@ function Inspections({
       setFormError('Toda nao conformidade precisa ter ao menos uma foto capturada pela camera.')
       return
     }
+
+    const reportIdToLink = form.citizenReportId.trim()
+    if (status === 'Finalizada' && reportIdToLink) {
+      const targetReport = data.citizenReports.find((r) => r.id === reportIdToLink)
+      if (!targetReport || targetReport.linkedInspectionId) {
+        setFormError('O protocolo selecionado nao pode ser vinculado (inexistente ou ja possui vistoria registrada).')
+        return
+      }
+      if (targetReport.status === 'Arquivada') {
+        setFormError('Nao e possivel vincular vistoria a denuncia arquivada.')
+        return
+      }
+    }
+
     setFormError('')
     const id = makeId('vis')
     const inspection: Inspection = {
@@ -2716,8 +2888,13 @@ function Inspections({
       inspectorId: currentUser.id,
       status,
       ...form,
+      citizenReportId: form.citizenReportId.trim() || undefined,
       answers,
     }
+
+    const nowIso = new Date().toISOString()
+    const reportIdForCommit = status === 'Finalizada' ? form.citizenReportId.trim() : ''
+    const linkedReport = reportIdForCommit ? data.citizenReports.find((r) => r.id === reportIdForCommit) : undefined
 
     const nonConformingAnswers = status === 'Finalizada' ? answers.filter((answer) => answer.status === 'nao_conforme') : []
     const generatedNonConformities: NonConformity[] = nonConformingAnswers.map((answer, index) => {
@@ -2807,7 +2984,39 @@ function Inspections({
         inspections: [inspection, ...draft.inspections],
         nonConformities: [...generatedNonConformities, ...draft.nonConformities],
         tickets: [...generatedTickets, ...draft.tickets],
+        citizenReports: reportIdForCommit
+          ? draft.citizenReports.map((item) =>
+              item.id === reportIdForCommit
+                ? {
+                    ...item,
+                    linkedInspectionId: id,
+                    updatedAt: nowIso,
+                    history: [
+                      {
+                        id: makeId('hist-den'),
+                        at: nowIso,
+                        status: item.status,
+                        note: `Vistoria ${inspection.number} finalizada em campo e vinculada a este protocolo.`,
+                        userId: currentUser.id,
+                      },
+                      ...item.history,
+                    ],
+                  }
+                : item,
+            )
+          : draft.citizenReports,
         notifications: [
+          ...(reportIdForCommit
+            ? [
+                {
+                  id: makeId('notif'),
+                  title: 'Denuncia vinculada',
+                  message: `O protocolo ${linkedReport?.protocol ?? reportIdForCommit} foi associado a ${inspection.number}.`,
+                  createdAt: nowIso,
+                  read: false,
+                },
+              ]
+            : []),
           ...generatedNonConformities.map((nonConformity) => ({
             id: makeId('notif'),
             title: 'Nova nao conformidade',
@@ -2830,6 +3039,9 @@ function Inspections({
       id,
       `${inspection.number} salva com ${generatedNonConformities.length} nao conformidade(s) e ${generatedTickets.length} chamado(s) gerado(s).`,
     )
+    if (status === 'Finalizada') {
+      setFinishHint({ ncCount: generatedNonConformities.length, inspectionNumber: inspection.number })
+    }
     setForm({
       serviceAreaId: defaultScript?.serviceAreaId ?? data.serviceAreas[0]?.id ?? '',
       inspectionTypeId: defaultScript?.inspectionTypeId ?? data.inspectionTypes[0]?.id ?? '',
@@ -2839,14 +3051,47 @@ function Inspections({
       categoryId: data.categories[0]?.id ?? '',
       generalNotes: '',
       coordinates: null,
+      citizenReportId: '',
     })
   }
 
   return (
     <div className="space-y-6">
+      {finishHint && (
+        <div
+          className="fixed bottom-5 left-4 right-4 z-50 mx-auto flex max-w-lg flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-950/15 sm:left-auto sm:right-6 sm:mx-0"
+          role="status"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-bold text-slate-900">Vistoria finalizada</p>
+              <p className="mt-1 text-sm text-slate-600">
+                {finishHint.ncCount === 0
+                  ? `${finishHint.inspectionNumber} foi registrada sem novas nao conformidades.`
+                  : `${finishHint.inspectionNumber} gerou ${finishHint.ncCount} nao conformidade(s). Acompanhe prazos e adequacao em Planos de acao.`}
+              </p>
+            </div>
+            <button type="button" className="shrink-0 rounded-xl p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Fechar" onClick={() => setFinishHint(null)}>
+              <X size={20} />
+            </button>
+          </div>
+          {finishHint.ncCount > 0 && (
+            <button
+              type="button"
+              className="w-full rounded-2xl bg-[#0066B3] px-4 py-3 text-sm font-bold text-white shadow-md shadow-[#0066B3]/20 transition hover:bg-[#005a9e]"
+              onClick={() => {
+                onNavigate?.('planos')
+                setFinishHint(null)
+              }}
+            >
+              Ver planos de acao gerados
+            </button>
+          )}
+        </div>
+      )}
       <SectionTitle eyebrow="Fiscalizacao" title="Nova vistoria" description="Use o mapa para registrar a geolocalizacao, tire fotos em campo e gere chamados das nao conformidades." />
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <Card>
+        <Card id="nova-vistoria-form">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label="Area de servico">
               <select
@@ -2857,7 +3102,7 @@ function Inspections({
                   const firstType = data.inspectionTypes.find((type) => type.serviceAreaId === serviceAreaId)
                   const firstScript = firstType ? data.inspectionScripts.find((script) => script.serviceAreaId === serviceAreaId && script.inspectionTypeId === firstType.id) : undefined
                   const scriptQuestions = firstScript ? data.scriptQuestions.filter((item) => item.active && item.scriptId === firstScript.id).sort((a, b) => a.order - b.order) : []
-                  setForm({ ...form, serviceAreaId, inspectionTypeId: firstType?.id ?? '', scriptId: firstScript?.id ?? '' })
+                  setForm({ ...form, serviceAreaId, inspectionTypeId: firstType?.id ?? '', scriptId: firstScript?.id ?? '', citizenReportId: '' })
                   setAnswers(scriptQuestions.map((item) => ({ checklistItemId: item.id, status: 'conforme', notes: '', photos: [], openTicket: item.autoCreateTicket })))
                 }}
               >
@@ -2944,6 +3189,25 @@ function Inspections({
             <Field label="Responsavel">
               <input className={inputClass} value={currentUser.name} readOnly />
             </Field>
+            <div className="md:col-span-2">
+              <Field label="Denuncia vinculada (opcional)">
+                <select
+                  className={inputClass}
+                  value={form.citizenReportId}
+                  onChange={(event) => setForm({ ...form, citizenReportId: event.target.value })}
+                >
+                  <option value="">Nenhum protocolo</option>
+                  {linkableCitizenReports.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.protocol} — {r.title.length > 72 ? `${r.title.slice(0, 72)}…` : r.title}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-slate-500">
+                  Ao <strong className="font-semibold text-slate-700">finalizar</strong> a vistoria, o protocolo passa a apontar para esta inspecao em campo (visivel no painel de Denuncias).
+                </p>
+              </Field>
+            </div>
           </div>
 
           <div className="mt-6">
@@ -2985,7 +3249,7 @@ function Inspections({
                           onClick={() => updateAnswer(item.id, { status, openTicket: status === 'nao_conforme' ? answer?.openTicket ?? itemMeta.autoCreateTicket : false })}
                           className={clsx(
                             'rounded-2xl px-3 py-2 text-xs font-bold',
-                            answer?.status === status ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                            answer?.status === status ? 'bg-[#0066B3] text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                           )}
                         >
                           {status === 'conforme' ? 'Conforme' : status === 'nao_conforme' ? 'Nao conforme' : 'Nao se aplica'}
@@ -3056,7 +3320,7 @@ function Inspections({
             <button type="button" className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold" onClick={() => saveInspection('Rascunho')}>
               Salvar rascunho
             </button>
-            <button type="button" className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white" onClick={() => saveInspection('Finalizada')}>
+            <button type="button" className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white" onClick={() => saveInspection('Finalizada')}>
               Finalizar vistoria
             </button>
           </div>
@@ -3065,13 +3329,25 @@ function Inspections({
         <Card>
           <SectionTitle title="Vistorias recentes" description="Relatorio automatico pode ser impresso em Relatorios." />
           <div className="mt-5 space-y-3">
-            {data.inspections.length === 0 && <EmptyState title="Nenhuma vistoria registrada" text="Finalize uma vistoria para acompanhar o historico." />}
-            {data.inspections.slice(0, 8).map((inspection) => (
+            {data.inspections.length === 0 && (
+              <EmptyState
+                title="Nenhuma vistoria registrada"
+                text="Finalize uma vistoria abaixo para acompanhar o historico neste painel."
+                ctaLabel="Ir para o formulario"
+                onCta={() => document.getElementById('nova-vistoria-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              />
+            )}
+            {data.inspections.slice(0, 8).map((inspection) => {
+              const linkedDenuncia = inspection.citizenReportId ? data.citizenReports.find((r) => r.id === inspection.citizenReportId) : undefined
+              return (
               <div key={inspection.id} className="rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-bold">{inspection.number}</p>
                     <p className="text-sm text-slate-500">{maps.locations[inspection.locationId]?.name}</p>
+                    {linkedDenuncia && (
+                      <p className="mt-1 text-xs font-semibold text-[#0066B3]">Denuncia {linkedDenuncia.protocol}</p>
+                    )}
                   </div>
                   <Badge className={inspection.status === 'Finalizada' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}>{inspection.status}</Badge>
                 </div>
@@ -3081,7 +3357,8 @@ function Inspections({
                   {inspection.answers.filter((answer) => answer.status === 'nao_conforme').length} nao conformidade(s)
                 </p>
               </div>
-            ))}
+              )
+            })}
           </div>
         </Card>
       </div>
@@ -3094,11 +3371,13 @@ function ActionPlans({
   maps,
   currentUser,
   commit,
+  onNavigate,
 }: {
   data: AppData
   maps: AppMaps
   currentUser: User
   commit: (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => void
+  onNavigate?: (page: Page) => void
 }) {
   const [statusFilter, setStatusFilter] = useState('Todos')
   const [criticalityFilter, setCriticalityFilter] = useState('Todas')
@@ -3255,7 +3534,25 @@ function ActionPlans({
                 ))}
               </tbody>
             </table>
-            {filtered.length === 0 && <EmptyState title="Nenhum registro encontrado" text="Nao ha nao conformidades para os filtros aplicados." />}
+            {filtered.length === 0 && (
+              <EmptyState
+                title={data.nonConformities.length === 0 ? 'Nenhuma nao conformidade' : 'Nenhum registro encontrado'}
+                text={
+                  data.nonConformities.length === 0
+                    ? 'Finalize uma vistoria com itens nao conformes para gerar planos de acao automaticamente.'
+                    : 'Nao ha nao conformidades para os filtros aplicados.'
+                }
+                ctaLabel={data.nonConformities.length === 0 ? 'Ir para Vistorias' : 'Limpar filtros'}
+                onCta={
+                  data.nonConformities.length === 0
+                    ? () => onNavigate?.('vistorias')
+                    : () => {
+                        setStatusFilter('Todos')
+                        setCriticalityFilter('Todas')
+                      }
+                }
+              />
+            )}
           </div>
         </Card>
 
@@ -3330,8 +3627,23 @@ function ActionPlans({
                 </div>
               </div>
             </div>
+          ) : data.nonConformities.length === 0 ? (
+            <EmptyState
+              title="Nenhuma nao conformidade"
+              text="Finalize uma vistoria com itens nao conformes para gerar planos de acao."
+              ctaLabel="Ir para Vistorias"
+              onCta={() => onNavigate?.('vistorias')}
+            />
           ) : (
-            <EmptyState title="Nenhuma nao conformidade" text="Finalize uma vistoria com itens nao conformes para gerar planos de acao." />
+            <EmptyState
+              title="Nenhum registro selecionado"
+              text="Ajuste os filtros da tabela ao lado para visualizar uma nao conformidade."
+              ctaLabel="Limpar filtros"
+              onCta={() => {
+                setStatusFilter('Todos')
+                setCriticalityFilter('Todas')
+              }}
+            />
           )}
         </Card>
       </div>
@@ -3704,7 +4016,7 @@ function OfficialDocuments({
                 (issueSource === 'denuncia' && (!sourceCitizenReport || data.citizenReports.length === 0))
               }
               onClick={createDocument}
-              className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+              className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
             >
               Gerar documento
             </button>
@@ -3739,10 +4051,13 @@ function OfficialDocuments({
             <div>
               <div id="official-document-print" className="rounded-3xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-600">Prefeitura Municipal</p>
-                    <h3 className="mt-1 text-2xl font-black">{selectedDocument.type}</h3>
-                    <p className="text-sm font-semibold text-slate-500">{selectedDocument.number}</p>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-start gap-4">
+                    <PrefeituraLogo size="md" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#0066B3]">Prefeitura Municipal</p>
+                      <h3 className="mt-1 text-2xl font-black">{selectedDocument.type}</h3>
+                      <p className="text-sm font-semibold text-slate-500">{selectedDocument.number}</p>
+                    </div>
                   </div>
                   <Badge className={officialDocumentStatusColors[selectedDocument.status]}>{selectedDocument.status}</Badge>
                 </div>
@@ -3844,7 +4159,7 @@ function OfficialDocuments({
                       type="button"
                       disabled={!bluetoothAvailable || printerHint.state === 'printing'}
                       onClick={() => void printViaBluetooth(selectedDocument)}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
+                      className="inline-flex items-center gap-2 rounded-2xl bg-[#0066B3] px-4 py-2 text-sm font-bold text-white disabled:opacity-50"
                     >
                       <Printer size={16} />
                       Impressora Bluetooth
@@ -4053,7 +4368,7 @@ function Tickets({
           <Field label="Descricao do problema">
             <textarea className={clsx(inputClass, 'min-h-24')} value={manualForm.description} onChange={(event) => setManualForm({ ...manualForm, description: event.target.value })} />
           </Field>
-          <button type="button" className="mt-4 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white" onClick={createManualTicket}>
+          <button type="button" className="mt-4 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white" onClick={createManualTicket}>
             Abrir chamado
           </button>
         </Card>
@@ -4312,7 +4627,7 @@ function PrintSettings() {
             )}
 
             <div className="flex flex-wrap gap-3">
-              <button type="button" disabled={!bluetoothSupported || status === 'printing'} onClick={testPrint} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+              <button type="button" disabled={!bluetoothSupported || status === 'printing'} onClick={testPrint} className="rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
                 {status === 'printing' ? 'Imprimindo...' : 'Conectar e imprimir teste'}
               </button>
               <button type="button" onClick={() => window.print()} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold">
@@ -4383,7 +4698,7 @@ function Reports({ data, maps }: { data: AppData; maps: AppMaps }) {
     <div className="space-y-6">
       <SectionTitle eyebrow="Gestao" title="Relatorios" description="Exportacoes iniciais do MVP. A impressao do navegador atende o relatorio em PDF no prototipo." />
       <div className="flex flex-wrap gap-3">
-        <button type="button" onClick={exportCsv} className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white">
+        <button type="button" onClick={exportCsv} className="inline-flex items-center gap-2 rounded-2xl bg-[#0066B3] px-5 py-3 text-sm font-bold text-white">
           <Download size={16} />
           Exportar chamados CSV/Excel
         </button>

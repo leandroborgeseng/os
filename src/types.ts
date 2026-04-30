@@ -190,6 +190,8 @@ export interface Inspection {
   status: 'Rascunho' | 'Finalizada'
   generalNotes: string
   coordinates?: Coordinates | null
+  /** Denuncia do portal vinculada quando a vistoria atende a um protocolo (preenchido ao finalizar). */
+  citizenReportId?: string
   answers: InspectionAnswer[]
 }
 

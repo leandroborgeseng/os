@@ -1,5 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
-  <rect width="64" height="64" rx="14" fill="#0066B3"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" role="img" aria-labelledby="prefTitulo">
+  <title id="prefTitulo">Marca da Prefeitura Municipal</title>
+  <rect width="64" height="64" rx="16" fill="#0066B3"/>
   <path
     d="M32 14 46 21.5V40.5C46 47.2 40.4 53.6 32 56 23.6 53.6 18 47.2 18 40.5V21.5L32 14Z"
     fill="#ffffff"
