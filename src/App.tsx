@@ -45,6 +45,7 @@ import type {
   Attachment,
   AuditLog,
   CitizenReport,
+  CitizenReportGroup,
   CitizenReportStatus,
   ChecklistItem,
   Coordinates,
@@ -294,6 +295,44 @@ function formatCoordinates(coordinates?: Coordinates | null) {
 
   const accuracy = coordinates.accuracy ? ` • precisao ${Math.round(coordinates.accuracy)}m` : ''
   return `${coordinates.latitude.toFixed(6)}, ${coordinates.longitude.toFixed(6)}${accuracy}`
+}
+
+function distanceInMeters(a?: Coordinates | null, b?: Coordinates | null) {
+  if (!a || !b) return Number.POSITIVE_INFINITY
+  const earthRadius = 6371000
+  const toRadians = (value: number) => (value * Math.PI) / 180
+  const deltaLat = toRadians(b.latitude - a.latitude)
+  const deltaLng = toRadians(b.longitude - a.longitude)
+  const lat1 = toRadians(a.latitude)
+  const lat2 = toRadians(b.latitude)
+  const h =
+    Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2) +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) * Math.sin(deltaLng / 2)
+
+  return 2 * earthRadius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h))
+}
+
+function normalizeReason(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((word) => word.length > 3)
+    .slice(0, 8)
+    .join(' ')
+}
+
+function reasonSimilarity(a: string, b: string) {
+  const wordsA = new Set(normalizeReason(a).split(' ').filter(Boolean))
+  const wordsB = new Set(normalizeReason(b).split(' ').filter(Boolean))
+  const union = new Set([...wordsA, ...wordsB])
+
+  if (union.size === 0) return 0
+
+  const intersection = [...wordsA].filter((word) => wordsB.has(word))
+  return intersection.length / union.size
 }
 
 function onlyDigits(value: string) {
@@ -926,6 +965,14 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
 
     setIsSubmitting(true)
     const protocol = nextProtocol('DEN', data.citizenReports.map((item) => item.protocol))
+    const existingGroup = data.citizenReportGroups.find(
+      (group) =>
+        group.categoryId === form.categoryId &&
+        group.serviceAreaId === form.serviceAreaId &&
+        distanceInMeters(group.coordinates, form.coordinates) <= 150 &&
+        reasonSimilarity(group.normalizedReason, `${form.title} ${form.description}`) >= 0.35,
+    )
+    const groupId = existingGroup?.id ?? makeId('grupo-denuncia')
     const now = new Date().toISOString()
     const report: CitizenReport = {
       id: makeId('denuncia'),
@@ -935,6 +982,7 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
       status: 'Recebida',
       categoryId: form.categoryId,
       serviceAreaId: form.serviceAreaId,
+      groupId,
       title: form.title,
       description: form.description,
       address: form.address,
@@ -952,10 +1000,35 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
         },
       ],
     }
+    const group: CitizenReportGroup = existingGroup ?? {
+      id: groupId,
+      number: nextProtocol('GRP', data.citizenReportGroups.map((item) => item.number)),
+      createdAt: now,
+      updatedAt: now,
+      serviceAreaId: form.serviceAreaId,
+      categoryId: form.categoryId,
+      title: form.title,
+      normalizedReason: normalizeReason(`${form.title} ${form.description}`),
+      coordinates: form.coordinates,
+      reportIds: [],
+      status: 'Recebida',
+    }
 
     commitPublic((draft) => ({
       ...draft,
       citizenReports: [report, ...draft.citizenReports],
+      citizenReportGroups: existingGroup
+        ? draft.citizenReportGroups.map((item) =>
+            item.id === existingGroup.id
+              ? {
+                  ...item,
+                  updatedAt: now,
+                  reportIds: [report.id, ...item.reportIds],
+                  status: item.status === 'Arquivada' || item.status === 'Concluida' ? 'Recebida' : item.status,
+                }
+              : item,
+          )
+        : [{ ...group, reportIds: [report.id] }, ...draft.citizenReportGroups],
       notifications: [
         {
           id: makeId('notif'),
@@ -968,7 +1041,12 @@ function CitizenPortal({ data, commitPublic }: { data: AppData; commitPublic: (p
       ],
     }))
     setIsSubmitting(false)
-    setMessage({ type: 'success', text: `Denuncia enviada com sucesso. Protocolo: ${protocol}` })
+    setMessage({
+      type: 'success',
+      text: existingGroup
+        ? `Denuncia enviada com sucesso. Protocolo: ${protocol}. Ela foi agrupada ao caso ${existingGroup.number}.`
+        : `Denuncia enviada com sucesso. Protocolo: ${protocol}.`,
+    })
     setForm({
       categoryId: data.categories[0]?.id ?? '',
       serviceAreaId: data.serviceAreas[0]?.id ?? '',
@@ -1897,6 +1975,8 @@ function CitizenReportsAdmin({
   const [assignedSectorId, setAssignedSectorId] = useState(data.sectors[0]?.id ?? '')
   const filtered = data.citizenReports.filter((report) => statusFilter === 'Todos' || report.status === statusFilter)
   const selected = data.citizenReports.find((report) => report.id === selectedId) ?? filtered[0]
+  const selectedGroup = selected?.groupId ? data.citizenReportGroups.find((group) => group.id === selected.groupId) : undefined
+  const groupedReports = selectedGroup ? data.citizenReports.filter((report) => selectedGroup.reportIds.includes(report.id)) : []
   const canTriage = ['admin', 'gestor'].includes(currentUser.role)
 
   const updateReportStatus = (report: CitizenReport, status: CitizenReportStatus, note: string) => {
@@ -2003,7 +2083,7 @@ function CitizenReportsAdmin({
         <MetricCard icon={<AlertTriangle />} label="Recebidas" value={data.citizenReports.length} tone="blue" />
         <MetricCard icon={<Search />} label="Em triagem" value={data.citizenReports.filter((item) => item.status === 'Em triagem').length} tone="amber" />
         <MetricCard icon={<TicketCheck />} label="Encaminhadas" value={data.citizenReports.filter((item) => item.status === 'Encaminhada').length} tone="teal" />
-        <MetricCard icon={<CheckCircle2 />} label="Concluidas" value={data.citizenReports.filter((item) => item.status === 'Concluida').length} tone="emerald" />
+        <MetricCard icon={<CheckCircle2 />} label="Casos agrupados" value={data.citizenReportGroups.length} tone="emerald" />
       </div>
 
       <Card>
@@ -2038,6 +2118,11 @@ function CitizenReportsAdmin({
                     <p className="font-bold">{report.protocol}</p>
                     <p className="mt-1 text-sm text-slate-700">{report.title}</p>
                     <p className="mt-1 text-xs text-slate-500">{maps.serviceAreas[report.serviceAreaId ?? '']?.name} • {formatDate(report.createdAt)}</p>
+                    {report.groupId && (
+                      <p className="mt-1 text-xs font-semibold text-blue-700">
+                        Grupo {data.citizenReportGroups.find((group) => group.id === report.groupId)?.number ?? 'em analise'} • {data.citizenReports.filter((item) => item.groupId === report.groupId).length} protocolo(s)
+                      </p>
+                    )}
                   </div>
                   <Badge className={citizenReportStatusColors[report.status]}>{report.status}</Badge>
                 </div>
@@ -2059,6 +2144,15 @@ function CitizenReportsAdmin({
               </div>
 
               <p className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-700">{selected.description}</p>
+              {selectedGroup && (
+                <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+                  <p className="font-bold">Caso agrupado {selectedGroup.number}</p>
+                  <p className="mt-1">
+                    {groupedReports.length} denuncia(s) indicam problema semelhante em um raio aproximado de 150 metros.
+                  </p>
+                  <p className="mt-2 text-xs font-semibold">Motivo agrupado: {selectedGroup.title}</p>
+                </div>
+              )}
               <div className="mt-5 grid gap-3 text-sm md:grid-cols-2">
                 <Info label="Endereco informado" value={selected.address || 'Nao informado'} />
                 <Info label="Coordenadas" value={formatCoordinates(selected.coordinates)} />
@@ -2074,6 +2168,26 @@ function CitizenReportsAdmin({
                   </div>
                 ))}
               </div>
+
+              {groupedReports.length > 1 && (
+                <div className="mt-6">
+                  <p className="text-sm font-bold text-slate-900">Denuncias relacionadas</p>
+                  <div className="mt-3 space-y-2">
+                    {groupedReports.map((report) => (
+                      <button
+                        key={report.id}
+                        type="button"
+                        className={clsx('w-full rounded-2xl border p-3 text-left text-sm', report.id === selected.id ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white')}
+                        onClick={() => setSelectedId(report.id)}
+                      >
+                        <p className="font-bold">{report.protocol}</p>
+                        <p className="text-slate-600">{report.title}</p>
+                        <p className="mt-1 text-xs text-slate-400">{formatDate(report.createdAt)} • {formatCoordinates(report.coordinates)}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {canTriage && (
                 <div className="mt-6 space-y-4">

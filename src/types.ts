@@ -272,6 +272,7 @@ export interface CitizenReport {
   status: CitizenReportStatus
   categoryId: string
   serviceAreaId?: string
+  groupId?: string
   title: string
   description: string
   address: string
@@ -291,6 +292,20 @@ export interface CitizenReport {
     note: string
     userId?: string
   }>
+}
+
+export interface CitizenReportGroup {
+  id: string
+  number: string
+  createdAt: string
+  updatedAt: string
+  serviceAreaId?: string
+  categoryId: string
+  title: string
+  normalizedReason: string
+  coordinates?: Coordinates | null
+  reportIds: string[]
+  status: CitizenReportStatus
 }
 
 export interface Notification {
@@ -342,6 +357,7 @@ export interface AppData {
   tickets: Ticket[]
   nonConformities: NonConformity[]
   citizenReports: CitizenReport[]
+  citizenReportGroups: CitizenReportGroup[]
   notifications: Notification[]
   auditLogs: AuditLog[]
   syncQueue: SyncQueueItem[]
