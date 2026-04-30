@@ -14,6 +14,7 @@ import {
   Menu,
   MapPin,
   Paperclip,
+  Printer,
   Search,
   ShieldCheck,
   TicketCheck,
@@ -37,6 +38,7 @@ import {
 } from 'recharts'
 import { clsx } from 'clsx'
 import 'leaflet/dist/leaflet.css'
+import { isBluetoothPrintSupported, printerPresets, printEscPosTestPage, type PrinterPresetId } from './bluetoothPrinter'
 import { loadData, loadRemoteData, makeId, nextProtocol, resetData, resetRemoteData, saveData, saveRemoteData } from './storage'
 import type {
   AppData,
@@ -55,7 +57,7 @@ import type {
   UserRole,
 } from './types'
 
-type Page = 'dashboard' | 'cadastros' | 'vistorias' | 'chamados' | 'relatorios' | 'auditoria'
+type Page = 'dashboard' | 'cadastros' | 'vistorias' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
 
 type AppMaps = {
   users: Record<string, AppData['users'][number]>
@@ -103,6 +105,7 @@ const pageConfig: Array<{ id: Page; label: string; icon: ReactNode; roles: UserR
   { id: 'vistorias', label: 'Vistorias', icon: <ClipboardCheck size={18} />, roles: ['admin', 'gestor'] },
   { id: 'chamados', label: 'Chamados', icon: <TicketCheck size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'relatorios', label: 'Relatorios', icon: <FileText size={18} />, roles: ['admin', 'gestor', 'consulta'] },
+  { id: 'impressao', label: 'Impressao', icon: <Printer size={18} />, roles: ['admin', 'gestor', 'executor'] },
   { id: 'auditoria', label: 'Auditoria', icon: <ShieldCheck size={18} />, roles: ['admin'] },
 ]
 
@@ -611,6 +614,9 @@ function App() {
     }
     if (activePage === 'relatorios') {
       return <Reports data={data} maps={maps} />
+    }
+    if (activePage === 'impressao') {
+      return <PrintSettings />
     }
     return <Audit data={data} maps={maps} />
   }
@@ -1829,6 +1835,109 @@ function ActionButton({ children, onClick }: { children: ReactNode; onClick: () 
     <button type="button" className="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800" onClick={onClick}>
       {children}
     </button>
+  )
+}
+
+function PrintSettings() {
+  const [selectedPresetId, setSelectedPresetId] = useState<PrinterPresetId>(() => (window.localStorage.getItem('printer-preset-id') as PrinterPresetId | null) ?? 'generic-ffe0')
+  const [status, setStatus] = useState<'idle' | 'printing' | 'success' | 'error'>('idle')
+  const [message, setMessage] = useState('Nenhuma impressora conectada nesta sessao.')
+  const selectedPreset = printerPresets.find((preset) => preset.id === selectedPresetId) ?? printerPresets[0]
+  const bluetoothSupported = isBluetoothPrintSupported()
+
+  const updatePreset = (presetId: PrinterPresetId) => {
+    setSelectedPresetId(presetId)
+    window.localStorage.setItem('printer-preset-id', presetId)
+  }
+
+  const testPrint = async () => {
+    setStatus('printing')
+    setMessage('Solicitando permissao Bluetooth e conectando na impressora...')
+
+    try {
+      const printerName = await printEscPosTestPage(selectedPreset)
+      setStatus('success')
+      setMessage(`Teste enviado para ${printerName}.`)
+    } catch (error) {
+      setStatus('error')
+      setMessage(error instanceof Error ? error.message : 'Nao foi possivel imprimir pelo Bluetooth.')
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionTitle
+        eyebrow="Dispositivos de campo"
+        title="Impressao Bluetooth"
+        description="Conecte uma impressora termica compativel para testar a emissao de documentos oficiais pelo PWA."
+      />
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
+        <Card>
+          <SectionTitle title="Configurar impressora" description="A conexao Bluetooth direta funciona em navegadores compativeis, principalmente Chrome no Android, em ambiente HTTPS ou PWA instalado." />
+          <div className="mt-5 space-y-4">
+            <Field label="Perfil da impressora">
+              <select className={inputClass} value={selectedPresetId} onChange={(event) => updatePreset(event.target.value as PrinterPresetId)}>
+                {printerPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="font-bold text-slate-900">{selectedPreset.name}</p>
+              <p className="mt-1">{selectedPreset.description}</p>
+              <p className="mt-3 text-xs">
+                Service UUID: <span className="font-mono">{selectedPreset.serviceUuid}</span>
+              </p>
+              <p className="mt-1 text-xs">
+                Characteristic UUID: <span className="font-mono">{selectedPreset.characteristicUuid}</span>
+              </p>
+            </div>
+
+            {!bluetoothSupported && (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-800">
+                Este navegador nao permite conexao Bluetooth direta. Use Chrome no Android ou gere PDF/impressao padrao pelo navegador.
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-3">
+              <button type="button" disabled={!bluetoothSupported || status === 'printing'} onClick={testPrint} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+                {status === 'printing' ? 'Imprimindo...' : 'Conectar e imprimir teste'}
+              </button>
+              <button type="button" onClick={() => window.print()} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold">
+                Impressao do navegador
+              </button>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <SectionTitle title="Status" description="Use esta area para validar a impressora antes de emitir autos e termos em campo." />
+          <div
+            className={clsx(
+              'mt-5 rounded-2xl border p-4 text-sm font-semibold',
+              status === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-700',
+              status === 'error' && 'border-rose-200 bg-rose-50 text-rose-700',
+              status === 'printing' && 'border-sky-200 bg-sky-50 text-sky-900',
+              status === 'idle' && 'border-slate-200 bg-slate-50 text-slate-600',
+            )}
+          >
+            {message}
+          </div>
+
+          <div className="mt-5 space-y-3 text-sm text-slate-600">
+            <p className="font-bold text-slate-900">Proximos passos planejados</p>
+            <p>1. Gerar Auto de Infracao em HTML/PDF a partir da vistoria.</p>
+            <p>2. Capturar assinatura do responsavel no proprio PWA.</p>
+            <p>3. Imprimir o auto em ESC/POS e registrar data, fiscal, localizacao e status.</p>
+            <p>4. Salvar ciencia, recusa de assinatura ou falha de impressao no historico.</p>
+          </div>
+        </Card>
+      </div>
+    </div>
   )
 }
 
