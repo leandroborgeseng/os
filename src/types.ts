@@ -16,6 +16,20 @@ export type Priority = 'Baixa' | 'Media' | 'Alta' | 'Urgente'
 
 export type TicketOrigin = 'Manual' | 'Vistoria'
 
+export type Criticality = 'Baixa' | 'Media' | 'Alta' | 'Critica'
+
+export type QuestionResponseType =
+  | 'conformidade'
+  | 'sim_nao'
+  | 'texto'
+  | 'numero'
+  | 'data'
+  | 'selecao_unica'
+  | 'multipla_escolha'
+  | 'foto'
+  | 'assinatura'
+  | 'geolocalizacao'
+
 export interface Coordinates {
   latitude: number
   longitude: number
@@ -69,6 +83,67 @@ export interface ChecklistItem {
   active: boolean
 }
 
+export interface ServiceArea {
+  id: string
+  name: string
+  description: string
+  departmentId?: string
+  active: boolean
+}
+
+export interface InspectionType {
+  id: string
+  serviceAreaId: string
+  name: string
+  description: string
+  targetLabel: string
+  active: boolean
+}
+
+export interface InspectionScript {
+  id: string
+  serviceAreaId: string
+  inspectionTypeId: string
+  name: string
+  description: string
+  version: number
+  active: boolean
+}
+
+export interface ScriptSection {
+  id: string
+  scriptId: string
+  title: string
+  description: string
+  order: number
+}
+
+export interface ScriptQuestionOption {
+  id: string
+  label: string
+  riskScore?: number
+}
+
+export interface ScriptQuestion {
+  id: string
+  scriptId: string
+  sectionId: string
+  code: string
+  title: string
+  guidance: string
+  responseType: QuestionResponseType
+  options: ScriptQuestionOption[]
+  required: boolean
+  evidenceRequired: boolean
+  observationRequired: boolean
+  autoCreateTicket: boolean
+  defaultCorrectionDays?: number
+  criticality: Criticality
+  legalReference?: string
+  order: number
+  active: boolean
+}
+
 export interface Team {
   id: string
   name: string
@@ -98,6 +173,9 @@ export interface Inspection {
   createdAt: string
   finalizedAt?: string
   inspectorId: string
+  serviceAreaId?: string
+  inspectionTypeId?: string
+  scriptId?: string
   sectorId: string
   locationId: string
   categoryId: string
@@ -186,6 +264,11 @@ export interface AppData {
   locations: Location[]
   categories: InspectionCategory[]
   checklistItems: ChecklistItem[]
+  serviceAreas: ServiceArea[]
+  inspectionTypes: InspectionType[]
+  inspectionScripts: InspectionScript[]
+  scriptSections: ScriptSection[]
+  scriptQuestions: ScriptQuestion[]
   teams: Team[]
   inspections: Inspection[]
   tickets: Ticket[]

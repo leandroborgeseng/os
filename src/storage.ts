@@ -3,6 +3,10 @@ import type { AppData } from './types'
 
 const STORAGE_KEY = 'prefeitura-vistorias-chamados'
 
+function normalizeData(data: Partial<AppData>): AppData {
+  return { ...initialData, ...data } as AppData
+}
+
 export function loadData(): AppData {
   const stored = window.localStorage.getItem(STORAGE_KEY)
 
@@ -11,7 +15,7 @@ export function loadData(): AppData {
   }
 
   try {
-    return { ...initialData, ...JSON.parse(stored) } as AppData
+    return normalizeData(JSON.parse(stored) as Partial<AppData>)
   } catch {
     return initialData
   }
@@ -28,7 +32,7 @@ export async function loadRemoteData(): Promise<AppData> {
     throw new Error('Nao foi possivel carregar os dados do servidor.')
   }
 
-  const data = (await response.json()) as AppData
+  const data = normalizeData((await response.json()) as Partial<AppData>)
   saveData(data)
   return data
 }
@@ -46,7 +50,7 @@ export async function saveRemoteData(data: AppData): Promise<AppData> {
     throw new Error('Nao foi possivel salvar os dados no servidor.')
   }
 
-  return (await response.json()) as AppData
+  return normalizeData((await response.json()) as Partial<AppData>)
 }
 
 export function resetData() {
@@ -62,7 +66,7 @@ export async function resetRemoteData(): Promise<AppData> {
     throw new Error('Nao foi possivel restaurar os dados no servidor.')
   }
 
-  const data = (await response.json()) as AppData
+  const data = normalizeData((await response.json()) as Partial<AppData>)
   saveData(data)
   return data
 }

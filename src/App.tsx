@@ -46,27 +46,35 @@ import type {
   AuditLog,
   ChecklistItem,
   Coordinates,
+  Criticality,
   Inspection,
   InspectionAnswer,
   InspectionItemStatus,
   Location,
   Priority,
+  QuestionResponseType,
+  ScriptQuestion,
   Ticket,
   TicketStatus,
   User,
   UserRole,
 } from './types'
 
-type Page = 'dashboard' | 'cadastros' | 'vistorias' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
+type Page = 'dashboard' | 'cadastros' | 'roteiros' | 'vistorias' | 'chamados' | 'relatorios' | 'impressao' | 'auditoria'
 
 type AppMaps = {
   users: Record<string, AppData['users'][number]>
+  departments: Record<string, AppData['departments'][number]>
   sectors: Record<string, AppData['sectors'][number]>
   locations: Record<string, AppData['locations'][number]>
   categories: Record<string, AppData['categories'][number]>
   teams: Record<string, AppData['teams'][number]>
   checklistItems: Record<string, AppData['checklistItems'][number]>
   locationTypes: Record<string, AppData['locationTypes'][number]>
+  serviceAreas: Record<string, AppData['serviceAreas'][number]>
+  inspectionTypes: Record<string, AppData['inspectionTypes'][number]>
+  inspectionScripts: Record<string, AppData['inspectionScripts'][number]>
+  scriptSections: Record<string, AppData['scriptSections'][number]>
 }
 
 type InstallPromptEvent = Event & {
@@ -102,6 +110,7 @@ const statusColors: Record<TicketStatus, string> = {
 const pageConfig: Array<{ id: Page; label: string; icon: ReactNode; roles: UserRole[] }> = [
   { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'cadastros', label: 'Cadastros', icon: <Building2 size={18} />, roles: ['admin'] },
+  { id: 'roteiros', label: 'Roteiros', icon: <FileText size={18} />, roles: ['admin', 'gestor'] },
   { id: 'vistorias', label: 'Vistorias', icon: <ClipboardCheck size={18} />, roles: ['admin', 'gestor'] },
   { id: 'chamados', label: 'Chamados', icon: <TicketCheck size={18} />, roles: ['admin', 'gestor', 'executor', 'consulta'] },
   { id: 'relatorios', label: 'Relatorios', icon: <FileText size={18} />, roles: ['admin', 'gestor', 'consulta'] },
@@ -537,12 +546,17 @@ function App() {
   const maps: AppMaps = useMemo(
     () => ({
       users: Object.fromEntries(data.users.map((item) => [item.id, item])),
+      departments: Object.fromEntries(data.departments.map((item) => [item.id, item])),
       sectors: Object.fromEntries(data.sectors.map((item) => [item.id, item])),
       locations: Object.fromEntries(data.locations.map((item) => [item.id, item])),
       categories: Object.fromEntries(data.categories.map((item) => [item.id, item])),
       teams: Object.fromEntries(data.teams.map((item) => [item.id, item])),
       checklistItems: Object.fromEntries(data.checklistItems.map((item) => [item.id, item])),
       locationTypes: Object.fromEntries(data.locationTypes.map((item) => [item.id, item])),
+      serviceAreas: Object.fromEntries(data.serviceAreas.map((item) => [item.id, item])),
+      inspectionTypes: Object.fromEntries(data.inspectionTypes.map((item) => [item.id, item])),
+      inspectionScripts: Object.fromEntries(data.inspectionScripts.map((item) => [item.id, item])),
+      scriptSections: Object.fromEntries(data.scriptSections.map((item) => [item.id, item])),
     }),
     [data],
   )
@@ -605,6 +619,9 @@ function App() {
     }
     if (activePage === 'cadastros') {
       return <Registrations data={data} maps={maps} currentUser={currentUser} commit={commit} />
+    }
+    if (activePage === 'roteiros') {
+      return <InspectionScriptsAdmin data={data} maps={maps} currentUser={currentUser} commit={commit} />
     }
     if (activePage === 'vistorias') {
       return <Inspections data={data} maps={maps} currentUser={currentUser} commit={commit} />
@@ -1168,6 +1185,447 @@ function Registrations({
   )
 }
 
+const responseTypeLabels: Record<QuestionResponseType, string> = {
+  conformidade: 'Conformidade',
+  sim_nao: 'Sim/Nao',
+  texto: 'Texto',
+  numero: 'Numero',
+  data: 'Data',
+  selecao_unica: 'Selecao unica',
+  multipla_escolha: 'Multipla escolha',
+  foto: 'Foto',
+  assinatura: 'Assinatura',
+  geolocalizacao: 'Geolocalizacao',
+}
+
+const criticalityColors: Record<Criticality, string> = {
+  Baixa: 'border-lime-200 bg-lime-50 text-lime-800',
+  Media: 'border-amber-200 bg-amber-50 text-amber-800',
+  Alta: 'border-orange-200 bg-orange-50 text-orange-800',
+  Critica: 'border-rose-200 bg-rose-50 text-rose-800',
+}
+
+function InspectionScriptsAdmin({
+  data,
+  maps,
+  currentUser,
+  commit,
+}: {
+  data: AppData
+  maps: AppMaps
+  currentUser: User
+  commit: (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => void
+}) {
+  const canEdit = ['admin', 'gestor'].includes(currentUser.role)
+  const [selectedScriptId, setSelectedScriptId] = useState(data.inspectionScripts[0]?.id ?? '')
+  const [areaForm, setAreaForm] = useState({ id: '', name: '', description: '', departmentId: data.departments[0]?.id ?? '' })
+  const [typeForm, setTypeForm] = useState({ id: '', serviceAreaId: data.serviceAreas[0]?.id ?? '', name: '', description: '', targetLabel: 'Local' })
+  const [scriptForm, setScriptForm] = useState({ id: '', serviceAreaId: data.serviceAreas[0]?.id ?? '', inspectionTypeId: data.inspectionTypes[0]?.id ?? '', name: '', description: '' })
+  const [sectionForm, setSectionForm] = useState({ id: '', title: '', description: '' })
+  const [questionForm, setQuestionForm] = useState({
+    id: '',
+    sectionId: data.scriptSections.find((section) => section.scriptId === selectedScriptId)?.id ?? '',
+    code: '',
+    title: '',
+    guidance: '',
+    responseType: 'conformidade' as QuestionResponseType,
+    optionsText: '',
+    required: true,
+    evidenceRequired: false,
+    observationRequired: false,
+    autoCreateTicket: true,
+    defaultCorrectionDays: '10',
+    criticality: 'Media' as Criticality,
+    legalReference: '',
+  })
+  const selectedScript = data.inspectionScripts.find((script) => script.id === selectedScriptId) ?? data.inspectionScripts[0]
+  const selectedSections = data.scriptSections.filter((section) => section.scriptId === selectedScript?.id).sort((a, b) => a.order - b.order)
+  const selectedQuestions = data.scriptQuestions.filter((question) => question.scriptId === selectedScript?.id && question.active).sort((a, b) => a.order - b.order)
+  const availableTypes = data.inspectionTypes.filter((type) => type.serviceAreaId === scriptForm.serviceAreaId)
+
+  const saveArea = () => {
+    if (!areaForm.name.trim()) return
+    const id = areaForm.id || makeId('area')
+    const area = { ...areaForm, id, active: true }
+    commit(
+      (draft) => ({ ...draft, serviceAreas: areaForm.id ? draft.serviceAreas.map((item) => (item.id === id ? area : item)) : [area, ...draft.serviceAreas] }),
+      areaForm.id ? 'Atualizou area de servico' : 'Criou area de servico',
+      'areas_servico',
+      id,
+      `Area de servico ${area.name} salva.`,
+    )
+    setAreaForm({ id: '', name: '', description: '', departmentId: data.departments[0]?.id ?? '' })
+  }
+
+  const saveType = () => {
+    if (!typeForm.name.trim()) return
+    const id = typeForm.id || makeId('tipo-vistoria')
+    const inspectionType = { ...typeForm, id, active: true }
+    commit(
+      (draft) => ({ ...draft, inspectionTypes: typeForm.id ? draft.inspectionTypes.map((item) => (item.id === id ? inspectionType : item)) : [inspectionType, ...draft.inspectionTypes] }),
+      typeForm.id ? 'Atualizou tipo de vistoria' : 'Criou tipo de vistoria',
+      'tipos_vistoria',
+      id,
+      `Tipo de vistoria ${inspectionType.name} salvo.`,
+    )
+    setTypeForm({ id: '', serviceAreaId: data.serviceAreas[0]?.id ?? '', name: '', description: '', targetLabel: 'Local' })
+  }
+
+  const saveScript = () => {
+    if (!scriptForm.name.trim()) return
+    const id = scriptForm.id || makeId('roteiro')
+    const script = { ...scriptForm, id, version: 1, active: true }
+    commit(
+      (draft) => ({ ...draft, inspectionScripts: scriptForm.id ? draft.inspectionScripts.map((item) => (item.id === id ? script : item)) : [script, ...draft.inspectionScripts] }),
+      scriptForm.id ? 'Atualizou roteiro' : 'Criou roteiro',
+      'roteiros_vistoria',
+      id,
+      `Roteiro ${script.name} salvo.`,
+    )
+    setSelectedScriptId(id)
+    setScriptForm({ id: '', serviceAreaId: data.serviceAreas[0]?.id ?? '', inspectionTypeId: data.inspectionTypes[0]?.id ?? '', name: '', description: '' })
+  }
+
+  const saveSection = () => {
+    if (!selectedScript || !sectionForm.title.trim()) return
+    const id = sectionForm.id || makeId('secao')
+    const order = sectionForm.id ? maps.scriptSections[id]?.order ?? 1 : selectedSections.length + 1
+    const section = { ...sectionForm, id, scriptId: selectedScript.id, order }
+    commit(
+      (draft) => ({ ...draft, scriptSections: sectionForm.id ? draft.scriptSections.map((item) => (item.id === id ? section : item)) : [...draft.scriptSections, section] }),
+      sectionForm.id ? 'Atualizou secao de roteiro' : 'Criou secao de roteiro',
+      'secoes_roteiro',
+      id,
+      `Secao ${section.title} salva no roteiro ${selectedScript.name}.`,
+    )
+    setSectionForm({ id: '', title: '', description: '' })
+  }
+
+  const saveQuestion = () => {
+    if (!selectedScript || !questionForm.sectionId || !questionForm.title.trim()) return
+    const id = questionForm.id || makeId('pergunta')
+    const options = questionForm.optionsText
+      .split(',')
+      .map((option) => option.trim())
+      .filter(Boolean)
+      .map((label, index) => ({ id: `${id}-opcao-${index + 1}`, label }))
+    const question: ScriptQuestion = {
+      id,
+      scriptId: selectedScript.id,
+      sectionId: questionForm.sectionId,
+      code: questionForm.code.trim() || `ITEM-${selectedQuestions.length + 1}`,
+      title: questionForm.title,
+      guidance: questionForm.guidance,
+      responseType: questionForm.responseType,
+      options,
+      required: questionForm.required,
+      evidenceRequired: questionForm.evidenceRequired,
+      observationRequired: questionForm.observationRequired,
+      autoCreateTicket: questionForm.autoCreateTicket,
+      defaultCorrectionDays: Number(questionForm.defaultCorrectionDays) || undefined,
+      criticality: questionForm.criticality,
+      legalReference: questionForm.legalReference || undefined,
+      order: questionForm.id ? data.scriptQuestions.find((item) => item.id === id)?.order ?? 1 : selectedQuestions.length + 1,
+      active: true,
+    }
+    commit(
+      (draft) => ({ ...draft, scriptQuestions: questionForm.id ? draft.scriptQuestions.map((item) => (item.id === id ? question : item)) : [...draft.scriptQuestions, question] }),
+      questionForm.id ? 'Atualizou pergunta de roteiro' : 'Criou pergunta de roteiro',
+      'perguntas_roteiro',
+      id,
+      `Pergunta ${question.code} salva no roteiro ${selectedScript.name}.`,
+    )
+    setQuestionForm({
+      id: '',
+      sectionId: selectedSections[0]?.id ?? '',
+      code: '',
+      title: '',
+      guidance: '',
+      responseType: 'conformidade',
+      optionsText: '',
+      required: true,
+      evidenceRequired: false,
+      observationRequired: false,
+      autoCreateTicket: true,
+      defaultCorrectionDays: '10',
+      criticality: 'Media',
+      legalReference: '',
+    })
+  }
+
+  return (
+    <div className="space-y-6">
+      <SectionTitle eyebrow="Configuracao" title="Roteiros de vistoria" description="Monte roteiros por area de servico, tipo de vistoria, secoes e perguntas configuraveis." />
+      {!canEdit && <EmptyState title="Acesso somente leitura" text="Seu perfil pode consultar roteiros, mas nao pode alterar configuracoes." />}
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        <Card>
+          <SectionTitle title="Areas de servico" description="Ex.: Vigilancia Sanitaria, Obras, Educacao e Meio Ambiente." />
+          <div className="mt-5 space-y-4">
+            <Field label="Nome da area">
+              <input className={inputClass} value={areaForm.name} onChange={(event) => setAreaForm({ ...areaForm, name: event.target.value })} />
+            </Field>
+            <Field label="Secretaria vinculada">
+              <select className={inputClass} value={areaForm.departmentId} onChange={(event) => setAreaForm({ ...areaForm, departmentId: event.target.value })}>
+                {data.departments.map((department) => (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Descricao">
+              <textarea className={clsx(inputClass, 'min-h-24')} value={areaForm.description} onChange={(event) => setAreaForm({ ...areaForm, description: event.target.value })} />
+            </Field>
+            <button type="button" disabled={!canEdit} onClick={saveArea} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+              {areaForm.id ? 'Salvar area' : 'Adicionar area'}
+            </button>
+          </div>
+        </Card>
+
+        <Card>
+          <SectionTitle title="Tipos de vistoria" description="Defina o alvo e a finalidade do roteiro." />
+          <div className="mt-5 space-y-4">
+            <Field label="Area">
+              <select className={inputClass} value={typeForm.serviceAreaId} onChange={(event) => setTypeForm({ ...typeForm, serviceAreaId: event.target.value })}>
+                {data.serviceAreas.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Nome do tipo">
+              <input className={inputClass} value={typeForm.name} onChange={(event) => setTypeForm({ ...typeForm, name: event.target.value })} />
+            </Field>
+            <Field label="Rotulo do alvo">
+              <input className={inputClass} value={typeForm.targetLabel} onChange={(event) => setTypeForm({ ...typeForm, targetLabel: event.target.value })} />
+            </Field>
+            <Field label="Descricao">
+              <textarea className={clsx(inputClass, 'min-h-24')} value={typeForm.description} onChange={(event) => setTypeForm({ ...typeForm, description: event.target.value })} />
+            </Field>
+            <button type="button" disabled={!canEdit} onClick={saveType} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+              {typeForm.id ? 'Salvar tipo' : 'Adicionar tipo'}
+            </button>
+          </div>
+        </Card>
+
+        <Card>
+          <SectionTitle title="Roteiro" description="Vincule o roteiro a uma area e tipo de vistoria." />
+          <div className="mt-5 space-y-4">
+            <Field label="Area">
+              <select
+                className={inputClass}
+                value={scriptForm.serviceAreaId}
+                onChange={(event) => {
+                  const serviceAreaId = event.target.value
+                  const firstType = data.inspectionTypes.find((type) => type.serviceAreaId === serviceAreaId)
+                  setScriptForm({ ...scriptForm, serviceAreaId, inspectionTypeId: firstType?.id ?? '' })
+                }}
+              >
+                {data.serviceAreas.map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Tipo de vistoria">
+              <select className={inputClass} value={scriptForm.inspectionTypeId} onChange={(event) => setScriptForm({ ...scriptForm, inspectionTypeId: event.target.value })}>
+                {availableTypes.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Nome do roteiro">
+              <input className={inputClass} value={scriptForm.name} onChange={(event) => setScriptForm({ ...scriptForm, name: event.target.value })} />
+            </Field>
+            <Field label="Descricao">
+              <textarea className={clsx(inputClass, 'min-h-24')} value={scriptForm.description} onChange={(event) => setScriptForm({ ...scriptForm, description: event.target.value })} />
+            </Field>
+            <button type="button" disabled={!canEdit} onClick={saveScript} className="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+              {scriptForm.id ? 'Salvar roteiro' : 'Adicionar roteiro'}
+            </button>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <Card>
+          <SectionTitle title="Roteiros cadastrados" description="Selecione um roteiro para configurar secoes e perguntas." />
+          <div className="mt-5 space-y-3">
+            {data.inspectionScripts.map((script) => (
+              <button
+                key={script.id}
+                type="button"
+                onClick={() => {
+                  setSelectedScriptId(script.id)
+                  setQuestionForm((previous) => ({ ...previous, sectionId: data.scriptSections.find((section) => section.scriptId === script.id)?.id ?? '' }))
+                }}
+                className={clsx('w-full rounded-2xl border p-4 text-left transition', selectedScript?.id === script.id ? 'border-blue-200 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}
+              >
+                <p className="font-bold text-slate-900">{script.name}</p>
+                <p className="mt-1 text-sm text-slate-600">{maps.serviceAreas[script.serviceAreaId]?.name} • {maps.inspectionTypes[script.inspectionTypeId]?.name}</p>
+                <p className="mt-2 text-xs text-slate-500">{script.description}</p>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <SectionTitle title={selectedScript?.name ?? 'Nenhum roteiro selecionado'} description="Organize secoes e perguntas do roteiro selecionado." />
+          {selectedScript && (
+            <div className="mt-5 space-y-6">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-bold text-slate-900">Nova secao</p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <Field label="Titulo">
+                    <input className={inputClass} value={sectionForm.title} onChange={(event) => setSectionForm({ ...sectionForm, title: event.target.value })} />
+                  </Field>
+                  <Field label="Descricao">
+                    <input className={inputClass} value={sectionForm.description} onChange={(event) => setSectionForm({ ...sectionForm, description: event.target.value })} />
+                  </Field>
+                </div>
+                <button type="button" disabled={!canEdit} onClick={saveSection} className="mt-4 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                  {sectionForm.id ? 'Salvar secao' : 'Adicionar secao'}
+                </button>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="text-sm font-bold text-slate-900">Nova pergunta</p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <Field label="Secao">
+                    <select className={inputClass} value={questionForm.sectionId} onChange={(event) => setQuestionForm({ ...questionForm, sectionId: event.target.value })}>
+                      {selectedSections.map((section) => (
+                        <option key={section.id} value={section.id}>
+                          {section.title}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Codigo">
+                    <input className={inputClass} value={questionForm.code} onChange={(event) => setQuestionForm({ ...questionForm, code: event.target.value })} placeholder="Ex.: VS-001" />
+                  </Field>
+                  <Field label="Pergunta">
+                    <input className={inputClass} value={questionForm.title} onChange={(event) => setQuestionForm({ ...questionForm, title: event.target.value })} />
+                  </Field>
+                  <Field label="Tipo de resposta">
+                    <select className={inputClass} value={questionForm.responseType} onChange={(event) => setQuestionForm({ ...questionForm, responseType: event.target.value as QuestionResponseType })}>
+                      {Object.entries(responseTypeLabels).map(([id, label]) => (
+                        <option key={id} value={id}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Criticidade">
+                    <select className={inputClass} value={questionForm.criticality} onChange={(event) => setQuestionForm({ ...questionForm, criticality: event.target.value as Criticality })}>
+                      {(['Baixa', 'Media', 'Alta', 'Critica'] as Criticality[]).map((criticality) => (
+                        <option key={criticality}>{criticality}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Prazo padrao para correcao">
+                    <input className={inputClass} type="number" value={questionForm.defaultCorrectionDays} onChange={(event) => setQuestionForm({ ...questionForm, defaultCorrectionDays: event.target.value })} />
+                  </Field>
+                  <Field label="Opcoes, se houver">
+                    <input className={inputClass} value={questionForm.optionsText} onChange={(event) => setQuestionForm({ ...questionForm, optionsText: event.target.value })} placeholder="Separar por virgula" />
+                  </Field>
+                  <Field label="Base legal">
+                    <input className={inputClass} value={questionForm.legalReference} onChange={(event) => setQuestionForm({ ...questionForm, legalReference: event.target.value })} />
+                  </Field>
+                </div>
+                <Field label="Orientacao ao fiscal">
+                  <textarea className={clsx(inputClass, 'min-h-24')} value={questionForm.guidance} onChange={(event) => setQuestionForm({ ...questionForm, guidance: event.target.value })} />
+                </Field>
+                <div className="mt-4 grid gap-3 text-sm font-semibold text-slate-700 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ['required', 'Obrigatoria'],
+                    ['evidenceRequired', 'Exige evidencia'],
+                    ['observationRequired', 'Exige observacao'],
+                    ['autoCreateTicket', 'Gera chamado'],
+                  ].map(([field, label]) => (
+                    <label key={field} className="flex items-center gap-2 rounded-2xl border border-slate-200 p-3">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(questionForm[field as keyof typeof questionForm])}
+                        onChange={(event) => setQuestionForm({ ...questionForm, [field]: event.target.checked })}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                <button type="button" disabled={!canEdit || selectedSections.length === 0} onClick={saveQuestion} className="mt-4 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white disabled:opacity-50">
+                  {questionForm.id ? 'Salvar pergunta' : 'Adicionar pergunta'}
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {selectedSections.map((section) => (
+                  <div key={section.id} className="rounded-2xl border border-slate-200 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold">{section.order}. {section.title}</p>
+                        <p className="text-sm text-slate-500">{section.description}</p>
+                      </div>
+                      <button type="button" className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold" disabled={!canEdit} onClick={() => setSectionForm(section)}>
+                        Editar secao
+                      </button>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {selectedQuestions
+                        .filter((question) => question.sectionId === section.id)
+                        .map((question) => (
+                          <div key={question.id} className="rounded-2xl bg-slate-50 p-4">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge className={criticalityColors[question.criticality]}>{question.criticality}</Badge>
+                              <Badge className="bg-blue-100 text-blue-700">{responseTypeLabels[question.responseType]}</Badge>
+                              {question.evidenceRequired && <Badge className="bg-amber-100 text-amber-700">Evidencia obrigatoria</Badge>}
+                            </div>
+                            <p className="mt-3 font-bold">{question.code} - {question.title}</p>
+                            <p className="mt-1 text-sm text-slate-600">{question.guidance}</p>
+                            {question.legalReference && <p className="mt-2 text-xs font-semibold text-slate-500">Base legal: {question.legalReference}</p>}
+                            <button
+                              type="button"
+                              className="mt-3 rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold"
+                              disabled={!canEdit}
+                              onClick={() =>
+                                setQuestionForm({
+                                  id: question.id,
+                                  sectionId: question.sectionId,
+                                  code: question.code,
+                                  title: question.title,
+                                  guidance: question.guidance,
+                                  responseType: question.responseType,
+                                  optionsText: question.options.map((option) => option.label).join(', '),
+                                  required: question.required,
+                                  evidenceRequired: question.evidenceRequired,
+                                  observationRequired: question.observationRequired,
+                                  autoCreateTicket: question.autoCreateTicket,
+                                  defaultCorrectionDays: String(question.defaultCorrectionDays ?? ''),
+                                  criticality: question.criticality,
+                                  legalReference: question.legalReference ?? '',
+                                })
+                              }
+                            >
+                              Editar pergunta
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 function Inspections({
   data,
   maps,
@@ -1179,7 +1637,11 @@ function Inspections({
   currentUser: User
   commit: (producer: (draft: AppData) => AppData, action: string, entity: string, entityId: string, description: string) => void
 }) {
+  const defaultScript = data.inspectionScripts.find((script) => script.active) ?? data.inspectionScripts[0]
   const [form, setForm] = useState({
+    serviceAreaId: defaultScript?.serviceAreaId ?? data.serviceAreas[0]?.id ?? '',
+    inspectionTypeId: defaultScript?.inspectionTypeId ?? data.inspectionTypes[0]?.id ?? '',
+    scriptId: defaultScript?.id ?? '',
     sectorId: data.sectors[0]?.id ?? '',
     locationId: data.locations[0]?.id ?? '',
     categoryId: data.categories[0]?.id ?? '',
@@ -1188,10 +1650,46 @@ function Inspections({
   })
   const [formError, setFormError] = useState('')
 
+  const selectedScript = data.inspectionScripts.find((script) => script.id === form.scriptId)
+  const availableTypes = data.inspectionTypes.filter((type) => type.serviceAreaId === form.serviceAreaId)
+  const availableScripts = data.inspectionScripts.filter((script) => script.active && script.serviceAreaId === form.serviceAreaId && script.inspectionTypeId === form.inspectionTypeId)
+  const activeScriptQuestions = selectedScript
+    ? data.scriptQuestions.filter((item) => item.active && item.scriptId === selectedScript.id).sort((a, b) => a.order - b.order)
+    : []
   const activeChecklist = data.checklistItems.filter((item) => item.active && item.categoryId === form.categoryId)
+  const activeInspectionItems = activeScriptQuestions.length > 0 ? activeScriptQuestions : activeChecklist
   const [answers, setAnswers] = useState<InspectionAnswer[]>(() =>
-    activeChecklist.map((item) => ({ checklistItemId: item.id, status: 'conforme', notes: '', photos: [], openTicket: false })),
+    activeInspectionItems.map((item) => ({ checklistItemId: item.id, status: 'conforme', notes: '', photos: [], openTicket: false })),
   )
+
+  const getInspectionItem = (itemId: string) => {
+    const scriptQuestion = data.scriptQuestions.find((item) => item.id === itemId)
+
+    if (scriptQuestion) {
+      return {
+        title: scriptQuestion.title,
+        required: scriptQuestion.required,
+        guidance: scriptQuestion.guidance,
+        evidenceRequired: scriptQuestion.evidenceRequired,
+        autoCreateTicket: scriptQuestion.autoCreateTicket,
+        defaultCorrectionDays: scriptQuestion.defaultCorrectionDays,
+        criticality: scriptQuestion.criticality,
+        legalReference: scriptQuestion.legalReference,
+      }
+    }
+
+    const checklistItem = maps.checklistItems[itemId]
+    return {
+      title: checklistItem?.title ?? 'Nao conformidade',
+      required: checklistItem?.required ?? false,
+      guidance: '',
+      evidenceRequired: true,
+      autoCreateTicket: true,
+      defaultCorrectionDays: 5,
+      criticality: 'Alta' as Criticality,
+      legalReference: undefined,
+    }
+  }
 
   const updateAnswer = (itemId: string, changes: Partial<InspectionAnswer>) => {
     setAnswers((previous) => previous.map((answer) => (answer.checklistItemId === itemId ? { ...answer, ...changes } : answer)))
@@ -1203,7 +1701,7 @@ function Inspections({
       setFormError('Informe a geolocalizacao da vistoria pelo mapa ou pelo GPS antes de finalizar.')
       return
     }
-    const nonConformitiesWithoutPhoto = answers.filter((answer) => answer.status === 'nao_conforme' && answer.photos.length === 0)
+    const nonConformitiesWithoutPhoto = answers.filter((answer) => answer.status === 'nao_conforme' && getInspectionItem(answer.checklistItemId).evidenceRequired && answer.photos.length === 0)
     if (status === 'Finalizada' && nonConformitiesWithoutPhoto.length > 0) {
       setFormError('Toda nao conformidade precisa ter ao menos uma foto capturada pela camera.')
       return
@@ -1224,11 +1722,12 @@ function Inspections({
     const generatedTickets: Ticket[] =
       status === 'Finalizada'
         ? answers
-            .filter((answer) => answer.status === 'nao_conforme' && answer.openTicket)
+            .filter((answer) => answer.status === 'nao_conforme' && answer.openTicket && getInspectionItem(answer.checklistItemId).autoCreateTicket)
             .map((answer, index) => {
-              const checklistItem = maps.checklistItems[answer.checklistItemId]
+              const inspectionItem = getInspectionItem(answer.checklistItemId)
               const team = data.teams.find((item) => item.sectorId === form.sectorId) ?? data.teams[0]
               const ticketNumber = nextProtocol('CH', [...data.tickets.map((item) => item.number), ...Array.from({ length: index }, (_, offset) => `CH-${new Date().getFullYear()}-${String(data.tickets.length + offset + 1).padStart(4, '0')}`)])
+              const correctionDays = inspectionItem.defaultCorrectionDays ?? 5
               return {
                 id: makeId('ticket'),
                 number: ticketNumber,
@@ -1238,10 +1737,10 @@ function Inspections({
                 locationId: form.locationId,
                 sectorId: form.sectorId,
                 categoryId: form.categoryId,
-                description: `${checklistItem?.title ?? 'Nao conformidade'}: ${answer.notes || 'Sem observacoes adicionais.'}`,
-                priority: 'Alta',
+                description: `${inspectionItem.title}: ${answer.notes || 'Sem observacoes adicionais.'}`,
+                priority: inspectionItem.criticality === 'Critica' ? 'Urgente' : inspectionItem.criticality === 'Alta' ? 'Alta' : inspectionItem.criticality === 'Media' ? 'Media' : 'Baixa',
                 teamId: team?.id ?? '',
-                dueDate: new Date(Date.now() + 5 * 86400000).toISOString(),
+                dueDate: new Date(Date.now() + correctionDays * 86400000).toISOString(),
                 status: 'Aberto',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
@@ -1282,7 +1781,16 @@ function Inspections({
       id,
       `${inspection.number} salva com ${generatedTickets.length} chamado(s) gerado(s).`,
     )
-    setForm({ sectorId: data.sectors[0]?.id ?? '', locationId: data.locations[0]?.id ?? '', categoryId: data.categories[0]?.id ?? '', generalNotes: '', coordinates: null })
+    setForm({
+      serviceAreaId: defaultScript?.serviceAreaId ?? data.serviceAreas[0]?.id ?? '',
+      inspectionTypeId: defaultScript?.inspectionTypeId ?? data.inspectionTypes[0]?.id ?? '',
+      scriptId: defaultScript?.id ?? '',
+      sectorId: data.sectors[0]?.id ?? '',
+      locationId: data.locations[0]?.id ?? '',
+      categoryId: data.categories[0]?.id ?? '',
+      generalNotes: '',
+      coordinates: null,
+    })
   }
 
   return (
@@ -1291,6 +1799,63 @@ function Inspections({
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Area de servico">
+              <select
+                className={inputClass}
+                value={form.serviceAreaId}
+                onChange={(event) => {
+                  const serviceAreaId = event.target.value
+                  const firstType = data.inspectionTypes.find((type) => type.serviceAreaId === serviceAreaId)
+                  const firstScript = firstType ? data.inspectionScripts.find((script) => script.serviceAreaId === serviceAreaId && script.inspectionTypeId === firstType.id) : undefined
+                  const scriptQuestions = firstScript ? data.scriptQuestions.filter((item) => item.active && item.scriptId === firstScript.id).sort((a, b) => a.order - b.order) : []
+                  setForm({ ...form, serviceAreaId, inspectionTypeId: firstType?.id ?? '', scriptId: firstScript?.id ?? '' })
+                  setAnswers(scriptQuestions.map((item) => ({ checklistItemId: item.id, status: 'conforme', notes: '', photos: [], openTicket: item.autoCreateTicket })))
+                }}
+              >
+                {data.serviceAreas.filter((area) => area.active).map((area) => (
+                  <option key={area.id} value={area.id}>
+                    {area.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Tipo de vistoria">
+              <select
+                className={inputClass}
+                value={form.inspectionTypeId}
+                onChange={(event) => {
+                  const inspectionTypeId = event.target.value
+                  const firstScript = data.inspectionScripts.find((script) => script.serviceAreaId === form.serviceAreaId && script.inspectionTypeId === inspectionTypeId)
+                  const scriptQuestions = firstScript ? data.scriptQuestions.filter((item) => item.active && item.scriptId === firstScript.id).sort((a, b) => a.order - b.order) : []
+                  setForm({ ...form, inspectionTypeId, scriptId: firstScript?.id ?? '' })
+                  setAnswers(scriptQuestions.map((item) => ({ checklistItemId: item.id, status: 'conforme', notes: '', photos: [], openTicket: item.autoCreateTicket })))
+                }}
+              >
+                {availableTypes.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Roteiro de vistoria">
+              <select
+                className={inputClass}
+                value={form.scriptId}
+                onChange={(event) => {
+                  const scriptId = event.target.value
+                  const scriptQuestions = data.scriptQuestions.filter((item) => item.active && item.scriptId === scriptId).sort((a, b) => a.order - b.order)
+                  setForm({ ...form, scriptId })
+                  setAnswers(scriptQuestions.map((item) => ({ checklistItemId: item.id, status: 'conforme', notes: '', photos: [], openTicket: item.autoCreateTicket })))
+                }}
+              >
+                {availableScripts.map((script) => (
+                  <option key={script.id} value={script.id}>
+                    {script.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
             <Field label="Secretaria/setor">
               <select className={inputClass} value={form.sectorId} onChange={(event) => setForm({ ...form, sectorId: event.target.value })}>
                 {data.sectors.map((sector) => (
@@ -1309,14 +1874,14 @@ function Inspections({
                 ))}
               </select>
             </Field>
-            <Field label="Tipo/categoria de vistoria">
+            <Field label="Categoria legada">
               <select
                 className={inputClass}
                 value={form.categoryId}
                 onChange={(event) => {
                   const categoryId = event.target.value
                   const checklist = data.checklistItems.filter((item) => item.active && item.categoryId === categoryId)
-                  setForm({ ...form, categoryId })
+                  setForm({ ...form, categoryId, scriptId: '' })
                   setAnswers(checklist.map((item) => ({ checklistItemId: item.id, status: 'conforme', notes: '', photos: [], openTicket: false })))
                 }}
               >
@@ -1339,22 +1904,36 @@ function Inspections({
           {formError && <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">{formError}</div>}
 
           <div className="mt-6 space-y-4">
-            {activeChecklist.length === 0 && <EmptyState title="Checklist vazio" text="Cadastre itens ativos para esta categoria antes de iniciar a vistoria." />}
-            {activeChecklist.map((item) => {
+            {activeInspectionItems.length === 0 && <EmptyState title="Roteiro vazio" text="Cadastre perguntas ativas para este roteiro ou selecione uma categoria legada com checklist." />}
+            {selectedScript && (
+              <div className="rounded-3xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+                <p className="font-bold">{selectedScript.name}</p>
+                <p className="mt-1">{selectedScript.description}</p>
+              </div>
+            )}
+            {activeInspectionItems.map((item) => {
               const answer = answers.find((entry) => entry.checklistItemId === item.id)
+              const itemMeta = getInspectionItem(item.id)
+              const section = 'sectionId' in item ? maps.scriptSections[item.sectionId] : undefined
               return (
                 <div key={item.id} className="rounded-3xl border border-slate-200 p-4">
                   <div className="flex flex-col justify-between gap-3 md:flex-row">
                     <div>
-                      <p className="font-bold text-slate-900">{item.title}</p>
-                      <p className="text-sm text-slate-500">{item.required ? 'Item obrigatorio' : 'Item opcional'}</p>
+                      {section && <p className="mb-1 text-xs font-bold uppercase tracking-[0.15em] text-slate-400">{section.title}</p>}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-bold text-slate-900">{itemMeta.title}</p>
+                        {'criticality' in item && <Badge className={criticalityColors[item.criticality]}>{item.criticality}</Badge>}
+                      </div>
+                      <p className="text-sm text-slate-500">{itemMeta.required ? 'Item obrigatorio' : 'Item opcional'}</p>
+                      {itemMeta.guidance && <p className="mt-2 text-sm text-slate-600">{itemMeta.guidance}</p>}
+                      {itemMeta.legalReference && <p className="mt-2 text-xs font-semibold text-slate-500">Base legal: {itemMeta.legalReference}</p>}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {(['conforme', 'nao_conforme', 'nao_aplica'] as InspectionItemStatus[]).map((status) => (
                         <button
                           key={status}
                           type="button"
-                          onClick={() => updateAnswer(item.id, { status, openTicket: status === 'nao_conforme' ? answer?.openTicket ?? true : false })}
+                          onClick={() => updateAnswer(item.id, { status, openTicket: status === 'nao_conforme' ? answer?.openTicket ?? itemMeta.autoCreateTicket : false })}
                           className={clsx(
                             'rounded-2xl px-3 py-2 text-xs font-bold',
                             answer?.status === status ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
@@ -1393,6 +1972,7 @@ function Inspections({
                         }}
                       />
                     </label>
+                    {itemMeta.evidenceRequired && <Badge className="bg-amber-100 text-amber-700">Evidencia obrigatoria quando houver nao conformidade</Badge>}
                     {answer?.status === 'nao_conforme' && (
                       <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                         <input
